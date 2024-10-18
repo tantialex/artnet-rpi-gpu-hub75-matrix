@@ -348,7 +348,7 @@ scene_info *default_scene(int argc, char **argv) {
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:b:it:ml:i:vjz")) != -1) {
+    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:b:it:ml:i:vjz?")) != -1) {
         switch (opt) {
         case 's':
             scene->shader_file = optarg;
@@ -364,8 +364,9 @@ scene_info *default_scene(int argc, char **argv) {
             scene->panel_width = atoi(optarg);
             break;
         case 'h':
+        case '?':
             scene->panel_height = atoi(optarg);
-            if (scene->panel_height) {
+            if (scene->panel_height <= 1) {
                 usage(argc, argv);
             }
             break;

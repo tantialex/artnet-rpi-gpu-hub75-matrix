@@ -54,8 +54,8 @@ rg, 1.0, gg .95, bg .92
 
 //////////////////////////////////////////////////////////
 
-#define CONSOLE_DEBUG 1
-#define ENABLE_ASSERTS 1
+#define CONSOLE_DEBUG 0
+#define ENABLE_ASSERTS 0
 #define PACKET_SIZE 1450
 #define PREAMBLE 0xdeadcafe
 
