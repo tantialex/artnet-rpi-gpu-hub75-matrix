@@ -192,7 +192,7 @@ to build and install library and header files to /usr/local run:
 # compile version without GPU support
 make lib
 # compile version with GPU support
-ake libgpu
+make libgpu
 # compile both versions
 make 
 # install headers and libraries in /usr/local
