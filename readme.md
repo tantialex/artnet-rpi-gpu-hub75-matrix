@@ -1,24 +1,47 @@
-This library implements HUB75 protocol on for the rpi 5
-=======================================================
+This library implements HUB75 protocol on the rpi5
+==================================================
 
-This is based on the work done by hzeller for adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
+This is based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html)
 
-BitBang hub75 data at 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel. Supports up to 3 ports per clock
+BitBang HUB75 data at 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel. Supports up to 3 ports per clock
 cycle (18 pixels worth of on/off data per clock cycle). Supports updating frame data at any moment so frame rates
 of >120Hz are easily possible. Support for up to 64bits of pwm data (1/64 pwm cycle for 64 different color levels
-for each RGB value)
+for each RGB value). No hardware clocks are required for operation so you can run the code with only group gpio
+privileges. Operation is mostly flicker free, however you should see improved response by running with nice -n -20
+and running the realtime PREEMPT_RT patch on the kernel (6.6) as of this writing. PREEMPT_RT is mainline in 6.12
+so hopefully no patches required on the next raspbian release!
 
-I have included GPU support using Linux's Generic Buffer Manager (gbm), GLEXv2 and EGL. This means you can use 
+I have included GPU support using Linux's Generic Buffer Manager (gbm), GLESv2 and EGL. This means you can use 
 OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included.
 
 This implementation only supports rpi5 at the moment. It should be simple to add support for other PIs as only
-the memory mapped peripheral address for the GPIO pins is required.
-
+the memory mapped peripheral address for the GPIO pins is required. Preliminary GPIO perihperal offsets are in
+rpihub75.h. There is a #ifdef PI3, PI4 and it defaults to PI5. If you are included, please test on an earlier PI
+and send a PR with the correct offsets for ZERO, PI3 and PI4.
 
 
 Please read HZeller's excellent write up on wiring the PI to the HUB75 display.  I highly recommend using one of his
 active 3 port boards to ensure proper level translation and to map the address lines, OE and clock pins to all 3 boards
+
+Hub75 Operation
+---------------
+All documentation reefers to 64x64 panels. Your Milage May Vary.
+Pins: r1,r2,g1,g2,b1,b2, this is the color data. each LED is actually 3 leds (red, green and blue). The LED can be
+on or off. We will be pulsing them on/off very quickly to achieve the illusion of different color values. Color data
+is sent 2 pixels at a time beginning on column 0. r1,g1,b1 is the pixel in the upper 32 rows, r2,g2,b2 is the pixel
+in the lower 32 rows.
+
+A,B,C,D,E are the address lines. These 5 pins represent the row address. 2^5 = 32 so depending on which bitmask is
+set on the address lines, the 2 corresponding led rows will be addressed for shifting in data. Data is shifted in on
+the falling edge of CLK. so after setting the address line, we set pixel value for column 0 along with clock, and then
+we pull clock low. that is pixel 0. we now shift in the next pixel and so on 64 times. If we have multiple panels we
+simply continue shifting in data (in 64 column chunks) for as many panels as we have.
+
+To actually update the panel, we must bring OE (output enable) line high (to disable to display) and toggle the latch
+pin. data for one row is now latched. we advance the address row lines drop the enable pin low (turn the display on)
+and begin the process again.
+
 
 Overview
 --------
@@ -116,12 +139,47 @@ Alternatively you can encode brightness data directly into the PWM data, however
 brightness levels even when using 64 bits of pwm data. this is controlled via the scene_info->jitter_brightness boolean.
 
 
+The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128bit SIMD vectors for the innermost
+loop. I have attempted to remove the (!!( operator to no avail. If you can improve the bit operations in this loop, this
+is 90% of program time. mask_lookup is 1ULL << j. pwm_signal[offset] is the current pixel start of the pwm bit plane.
+pwm_clear_mask is an inverse bit mask for the RGB pins of the current port. port[0] - port[6] are the rgb pins 1-6.
+r1_pwm is the linear 8bit rgb value to 64 bit pwm dat a lookup table for red, green, blue. etc.
+
+
+```c
+for (int j=0; j<bit_depth; j++) {
+        // mask off just this bit plane's data
+        uint64_t mask = mask_lookup[j];
+
+        // clear just the bits on this port for this bit plane so we don't accidentally clear other rgb ports
+        // Set the bits if the pwm value is set for this bit plane using bitmask instead of ternary
+        // the clear_mask sets all bits for other ports to 1 so that we don't interfere with the other ports
+        pwm_signal[offset] = (pwm_signal[offset] & pwm_clear_mask) |
+            (port[0] & (uint64_t)-(!!(r1_pwm & mask))) |
+            (port[1] & (uint64_t)-(!!(r2_pwm & mask))) |
+            (port[2] & (uint64_t)-(!!(g1_pwm & mask))) |
+            (port[3] & (uint64_t)-(!!(g2_pwm & mask))) |
+            (port[4] & (uint64_t)-(!!(b1_pwm & mask))) |
+            (port[5] & (uint64_t)-(!!(b2_pwm & mask)));
+        offset++;
+    }
+```
+
+
 GPU Support
 -----------
 To add GPU shader support you will need to install glesv2, gbm and mesagl.
 sudo apt-get install libgles2-mesa-dev libgbm-dev libegl1-mesa-dev
 
-support for single buffer shadertoy shaders is already added so just pass your shader via the -s command line parameter.
+support for single buffer shadertoy shaders is already added so just pass your shader via the -s command line
+parameter. This will set the path to the shader in the scene_info->shader string. render_shader() in gpu.c
+will look for a shader on the filesystem at path scene_info->shader and attempt to compile it. It will update
+glUniforms iTime and iResolution like shadertoy, however no support for additional buffers or textures has
+been added as of yet. Send a PR if you are inclined.
+
+After rendering the shader, the frame buffer is read using glReadPixels() and pwm_mapped the same as the
+cpu renderer. the render_shader loop does no return. It will attempt to usleep until scene->fps is matched.
+If the GPU can not keep up with the current fps, no sleep is performed.
 
 
 
@@ -129,17 +187,30 @@ Compiling and Installing
 ------------------------
 to build and install library and header files to /usr/local run:
 
-make
+
+```bash
+# compile version without GPU support
+make lib
+# compile version with GPU support
+ake libgpu
+# compile both versions
+make 
+# install headers and libraries in /usr/local
 sudo make install
 
-to compile your app:
-gcc -mtune=native -O3  -Wall -lpthread -lrpihub75 myapp.c -o myapp 
+# to compile your app without GPU support:
+gcc -lrpihub75 myapp.c -o myapp 
 
-run your app:
-./myapp -h
+# to compile your app with GPU support:
+gcc -lrpihub75_gpu myapp.c -o myapp 
 
-run your app for 1 64x64 panel on port0, 64 bits pwm depth, gamma 2.2, 50% brightness
-./myapp -h 64 -w 64 -p 1 -c 1 -d 64 -g 2.2 -b 128 -s shaders/cartoon.glsl
+# print command line configuration help
+./myapp 
+
+# run glsl shader app for 1 64x64 panel on port0, 64 bits pwm depth, gamma 2.2, 50% brightness
+./myapp -p 1 -c 1 -h 64 -w 64 -d 64 -g 2.2 -b 128 -s shaders/cartoon.glsl
+
+```
 
 Example Program
 ---------------
@@ -204,6 +275,18 @@ dithering by slighting increasing or decreasing the RGB values of the neighborin
 There is some code to achieve this but I have not had the results I would like to see so this is still a work in progress.
 If this is something you are interested in, drop me a line, send me a link to relevant information implementations or send
 a PR.
+
+
+Compiler Flags
+--------------
+* be sure to add -O3 to gcc when compiling your source.
+* -ffast-math reduces some precision but improves performance for some cases.
+* -mtune=native will compile for your CPU optomizations.
+* -Wdouble-promotion can help identify a lot of places where you are actually using double precision (64 bit) not single precision (float)
+   obviously 64bit floats are at least 2x slower than single precision.
+* -fopt-info-vec will show you loops the compiler was able to vectorize for you (SIMD, AVX, SSE, ETC)
+
+
 
 investigation:
 blue noise dithering
