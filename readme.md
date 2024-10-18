@@ -264,6 +264,44 @@ int main(int argc, char **argv)
 ```
 
 
+Command Line Arguments
+----------------------
+You can configure your setup for your application from the command line if you so choose by adding the call: 
+```c
+    scene_info *scene = default_scene(argc, argv);
+```
+
+This will parse the following command line parameters and setup your scene_info configuration for you.
+If you prefer you can also hard code this configuration or load it from a configuration file. This structure
+is required to call render_forever() and the scene->pwm_mapper() function pointer points to the current
+pwm_mapping function for the scene. (see func_pwm_mapper_t)
+
+
+```txt
+ Usage: ./example
+     -s <shader file>  GPU fragment shader file to render
+     -x <width>        image width              (16-384)
+     -y <height>       image height             (16-384)
+     -w <width>        panel width              (16/32/64)
+     -h <height>       panel height             (16/32/64)
+     -f <fps>          frames per second        (1-255)
+     -p <num ports>    number of ports          (1-3)
+     -c <num chains>   number of chains         (1-16)
+     -g <gamma>        gamma correction         (1.0-2.8)
+     -d <bit depth>    bit depth                (2-32)
+     -b <brightness>   overall brightness level (0-255)
+     -j                disable jitter, adjust PWM brightness instead
+     -l <frames>       motion blur frames       (0-32)
+     -v                vertical mirror image
+     -m                mirror output image
+     -i <mapper>       image mapper (u, image mapper not completed yet)
+     -t <tone_mapper>  (aces, reinhard, habble)
+     -z                run LED calibration script
+     -n                display data from UDP server on port 22222
+     -h                this help
+```
+
+
 
 Odds and Ends
 -------------
