@@ -216,7 +216,11 @@ Example Program
 ---------------
 
 ```c
-#include <hub75.h>
+// see main.c for this example
+#include <pthread.h>
+#include <rpihub75/rpihub75.h>
+#include <rpihub75/util.h>
+#include <rpihub75/gpu.h>
 
 // our CPU rendering implementation, see gpu.c for shader rendering details
 void* render_cpu(void *arg) {
