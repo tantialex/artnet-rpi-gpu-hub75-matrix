@@ -335,14 +335,17 @@ uint64_t byte_to_pwm64(const uint8_t input, const uint8_t num_bits) {
     // dont divide by 0!
     // lets make sure we get some 1s in there!
     if (num_ones == 0) {
-        num_ones++;
         if (input < 1) {
             return pwm_signal;
         }
     }
+    // don't output black unless the input is actually 0.
+    // this ensures we always have at least 1 bit set
+    num_ones++;
 
+
+    // now we will calculate the step size and place a 1 every step bits
     float step = (float)num_bits / (float)num_ones;  // Step for evenly distributing 1's
-    // printf("[%d] num 1: [%d] step: %f\n", i1, num_ones, step);
     for (uint16_t i = 0; i < num_ones; i++) {
         int shift = (int)(i * step);
         pwm_signal |= (1ULL << (shift));
@@ -358,7 +361,7 @@ uint64_t byte_to_pwm64(const uint8_t input, const uint8_t num_bits) {
  * 
  * I have experimented with intrinsics and NEON, but the code was only a bit faster
  * NEON was about .45ms faster per frame, or about 33-40ms savings per second.  
- * since we have a full 10ms to spare at 75fps, i don't think it's worth the hassle to maintain.
+ * i don't think it's worth the hassle to maintain.
  * 
  * @param pwm_signal 
  * @param scene 
@@ -562,9 +565,11 @@ void map_byte_image_to_pwm(uint8_t *restrict image, const scene_info *scene, con
 
 
 
-// map (image_width x panel height) blocks to pwm signal
-//void map_byte_image_to_pwm(uint8_t *image, uint32_t *pwm_signal, const uint8_t port_num, const scene_info *scene) {
-__attribute__((hot))
+/**
+ * @brief  do not use this method. it needs to be updated.  look for a corrected version in the future
+ * 
+ */
+__attribute__((hot,deprecated))
 void map_byte_image_to_pwm_dither(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync) {
 
 
@@ -645,6 +650,9 @@ void map_byte_image_to_pwm_dither(uint8_t *restrict image, const scene_info *sce
  * @brief map the lower half of the image to the front of the image. this allows connecting
  * panels in a left, left, down, right pattern (or right, right, down, left) if the image is
  * mirrored
+ * 
+ * This code is un-tested. If you have the time, please send me an implementation of U and V
+ * mappers
  * 
  * 
  * @param image - input buffer to map
@@ -728,6 +736,13 @@ void draw_square(uint8_t *image, const uint16_t img_width, const uint16_t img_he
 }
 
 
+/**
+ * @brief this is a work in progress.  unfinished. do not use.  check back in the future.
+ * 
+ * @param image 
+ * @param width 
+ * @param height 
+ */
 void dither_image(uint8_t *image, int width, int height) {
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
