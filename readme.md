@@ -8,25 +8,25 @@ BitBang HUB75 data at 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel.
 cycle (18 pixels worth of on/off data per clock cycle). Supports updating frame data at any moment so frame rates
 of >120Hz are easily possible. Support for up to 64bits of pwm data (1/64 pwm cycle for 64 different color levels
 for each RGB value). No hardware clocks are required for operation so you can run the code with only group gpio
-privileges. Operation is mostly flicker free, however you should see improved response by running with nice -n -20
-and running the realtime PREEMPT_RT patch on the kernel (6.6) as of this writing. PREEMPT_RT is mainline in 6.12
-so hopefully no patches required on the next raspbian release!
+privileges. Operation is mostly flicker free, however, you should see the improved response by running with nice -n -20
+and running the real-time PREEMPT_RT patch on the kernel (6.6) as of this writing. PREEMPT_RT is mainline in 6.12
+so hopefully no patches are required on the next raspbian release!
 
 I have included GPU support using Linux's Generic Buffer Manager (gbm), GLESv2 and EGL. This means you can use 
 OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included.
 
 This implementation only supports rpi5 at the moment. It should be simple to add support for other PIs as only
-the memory mapped peripheral address for the GPIO pins is required. Preliminary GPIO perihperal offsets are in
-rpihub75.h. There is a #ifdef PI3, PI4 and it defaults to PI5. If you are included, please test on an earlier PI
+the memory-mapped peripheral address for the GPIO pins is required. Preliminary GPIO peripheral offsets are in
+rpihub75.h. There is a #ifdef PI3, PI4 and it defaults to PI5. If you are inclined, please test on an earlier PI
 and send a PR with the correct offsets for ZERO, PI3 and PI4.
 
 
-Please read HZeller's excellent write up on wiring the PI to the HUB75 display.  I highly recommend using one of his
+Please read HZeller's excellent write-up on wiring the PI to the HUB75 display.  I highly recommend using one of his
 active 3 port boards to ensure proper level translation and to map the address lines, OE and clock pins to all 3 boards
 
 Hub75 Operation
 ---------------
-All documentation reefers to 64x64 panels. Your Milage May Vary.
+All documentation reefers to 64x64 panels. Your Mileage May Vary.
 Pins: r1,r2,g1,g2,b1,b2, this is the color data. each LED is actually 3 leds (red, green and blue). The LED can be
 on or off. We will be pulsing them on/off very quickly to achieve the illusion of different color values. Color data
 is sent 2 pixels at a time beginning on column 0. r1,g1,b1 is the pixel in the upper 32 rows, r2,g2,b2 is the pixel
@@ -35,7 +35,7 @@ in the lower 32 rows.
 A,B,C,D,E are the address lines. These 5 pins represent the row address. 2^5 = 32 so depending on which bitmask is
 set on the address lines, the 2 corresponding led rows will be addressed for shifting in data. Data is shifted in on
 the falling edge of CLK. so after setting the address line, we set pixel value for column 0 along with clock, and then
-we pull clock low. that is pixel 0. we now shift in the next pixel and so on 64 times. If we have multiple panels we
+we pull the clock low. That is pixel 0. We now shift in the next pixel and so on 64 times. If we have multiple panels we
 simply continue shifting in data (in 64 column chunks) for as many panels as we have.
 
 To actually update the panel, we must bring OE (output enable) line high (to disable to display) and toggle the latch
@@ -74,7 +74,7 @@ imageRGB[((y*scene->width) +x *scene->stride)+1] = green;
 imageRGB[((y*scene->width) +x *scene->stride)+2] = blue;
 ```
 
-for convenience you can use the set_pixel24 and set_pixel32 helpers to write image data similar to hzeller's library.
+for convenience, you can use the set_pixel24 and set_pixel32 helpers to write image data similar to hzeller's library.
 these functions are inline versions of the above code.
 
 
@@ -117,15 +117,15 @@ these values would be precomputed after every frame and toggled for each display
 
 each bit plane (that is a uint32_t with all of the pin toggles for all 3 output ports for a particular pixel on a single 
 bit plane, there are bit_depth number of bit planes per image) is updated atomically in a single write. This means there
-is no need for double buffering to achieve flicker free display. Simply call map_byte_image_to_pwm with your new image
+is no need for double buffering to achieve flicker-free display. Simply call map_byte_image_to_pwm with your new image
 buffer as often as you like. The data will be overwritten and the new PWM data will be updated immediately. This allows you
-to draw to the display at up to 9600Hz (depending on number of chained displays) however frame rates of about 120fps seem 
+to draw to the display at up to 9600Hz (depending on the number of chained displays) however frame rates of about 120fps seem 
 to produce excellent results and higher frame rates have diminishing returns after that.
 
 Because we are have a 9600-2400Hz refresh rate we are able to use up to 64bit PWM cycles. That means that each RGB value
 can have 64 levels of brightness or 64*64*64 = 262144 colors. In practice though, values at the lower end (more bits off
-than on) have much more perceptible effect on brightness than values at the higher end (more on than off). This is because
-the human eye is much more sensitive to brightness changes in darker levels than brighter levels. To correct this I have
+than on) have a much more perceptible effect on brightness than values at the higher end (more on than off). This is because
+the human eye is much more sensitive to brightness changes in darker levels than at brighter levels. To correct this I have
 added gamma correction. See color calibration further in this document for details.
 
 
@@ -135,15 +135,15 @@ mask for every pixel, we are able to output our normal pwm color data and toggle
 averaging out to the current brightness level. This provides for very fine tuned brightness control (255 levels) while
 maintaining excellent color balance.
 
-Alternatively you can encode brightness data directly into the PWM data, however this yields very poor results for low
+Alternatively, you can encode brightness data directly into the PWM data, however, this yields very poor results for low
 brightness levels even when using 64 bits of pwm data. this is controlled via the scene_info->jitter_brightness boolean.
 
 
-The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128bit SIMD vectors for the innermost
+The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128-bit SIMD vectors for the innermost
 loop. I have attempted to remove the (!!( operator to no avail. If you can improve the bit operations in this loop, this
-is 90% of program time. mask_lookup is 1ULL << j. pwm_signal[offset] is the current pixel start of the pwm bit plane.
+is 90% of the program time. mask_lookup is 1ULL << j. pwm_signal[offset] is the current pixel start of the pwm bit plane.
 pwm_clear_mask is an inverse bit mask for the RGB pins of the current port. port[0] - port[6] are the rgb pins 1-6.
-r1_pwm is the linear 8bit rgb value to 64 bit pwm dat a lookup table for red, green, blue. etc.
+r1_pwm is the linear 8-bit rgb value to 64-bit pwm dat a lookup table for red, green, blue. etc.
 
 
 ```c
@@ -178,7 +178,7 @@ glUniforms iTime and iResolution like shadertoy, however no support for addition
 been added as of yet. Send a PR if you are inclined.
 
 After rendering the shader, the frame buffer is read using glReadPixels() and pwm_mapped the same as the
-cpu renderer. the render_shader loop does no return. It will attempt to usleep until scene->fps is matched.
+CPU renderer. the render_shader loop does not return. It will attempt to usleep until scene->fps is matched.
 If the GPU can not keep up with the current fps, no sleep is performed.
 
 
@@ -306,10 +306,10 @@ pwm_mapping function for the scene. (see func_pwm_mapper_t)
 Odds and Ends
 -------------
 
-I have considered adding image dithering. Since we are going from 8 bit data (24bpp) down to 5 or 6 bit data (32 - 64 bit
+I have considered adding image dithering. Since we are going from 8-bit data (24bpp) down to 5 or 6-bit data (32 - 64 bit
 pwm values) we are losing 2-3 bits of data per pixel. What we lose in temporal data (value) we can reintroduce to the image
 spatially. Those 2-3 bits of information can be added to the neighboring pixels using ordered dithering or floyd steinberg 
-dithering by slighting increasing or decreasing the RGB values of the neighboring pixels based on this loss of information.
+dithering by slightly increasing or decreasing the RGB values of the neighboring pixels based on this loss of information.
 There is some code to achieve this but I have not had the results I would like to see so this is still a work in progress.
 If this is something you are interested in, drop me a line, send me a link to relevant information implementations or send
 a PR.
