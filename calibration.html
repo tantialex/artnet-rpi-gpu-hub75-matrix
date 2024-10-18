@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>HUB75 Calibration Bars</title>
+	<style>
+		body,
+		html {
+			height: 100%;
+			width: 100%;
+			margin: 0;
+			display: flex;
+		}
+
+		.bar {
+			flex: 1;
+			height: 100%;
+		}
+	</style>
+</head>
+
+<body>
+	<div id="bar1" class="bar"> </div>
+	<div id="bar2" class="bar"> </div>
+	<div id="bar3" class="bar">3 </div>
+	<div id="bar4" class="bar"> </div>
+	<div id="bar5" class="bar"> </div>
+
+	<script>
+		function setBarColors(color1, color2, color3, color4, color5) {
+			console.log("set color", color1, color2, color3, color4, color5);
+			document.getElementById("bar1").style.backgroundColor = color1;
+			document.getElementById("bar2").style.backgroundColor = color2;
+			document.getElementById("bar3").style.backgroundColor = color3;
+			document.getElementById("bar4").style.backgroundColor = color4;
+			document.getElementById("bar5").style.backgroundColor = color5;
+		}
+
+
+		function blend(red, green, blue) {
+			let c = [];
+			for (let i=1; i<=5; i++) {
+				r = Math.floor(red * (254 / i));
+				g = Math.floor(green * (254 / i));
+				b = Math.floor(blue * (254 / i));
+				c[i]  = "#" + r.toString(16).padStart(2, '0').toUpperCase();
+				c[i] += g.toString(16).padStart(2, '0').toUpperCase();
+				c[i] += b.toString(16).padStart(2, '0').toUpperCase();
+				console.log("Color", i, c[i]);
+			}
+			setBarColors(c[1], c[2], c[3], c[4], c[5]);
+		}
+
+		function next_bars() {
+			blend(rgb_bars[bar_index][0], rgb_bars[bar_index][1], rgb_bars[bar_index][2]);
+			bar_index++;
+			if (bar_index >= rgb_bars.length) {
+				bar_index = 0;
+			}
+		}
+		var bar_index = 0;
+		var rgb_bars = [
+			[1.0, 1.0, 1.0],
+			[1.0, 0.0, 0.0],
+			[0.0, 1.0, 0.0],
+			[0.0, 0.0, 1.0],
+			[1.0, 1.0, 1.0],
+			[0.0, 0.4, 0.8],
+			[0.8, 0.4, 1.0],
+			[0.8, 0.0, 0.4],
+			[0.0, 0.8, 0.4],
+			[0.4, 0.8, 0.0],
+			[0.4, 0.0, 0.8],
+			[0.4, 0.6, 0.8]
+		];
+
+
+
+
+		// next test bars on any key press
+		document.body.addEventListener('keypress', function(event) {
+			// Function to be called when any key is pressed
+			next_bars(event);
+		});
+
+
+		blend (1.0, 0.0, 0.0);
+		// Example usage
+		//setBarColors("red", "green", "blue", "yellow", "purple");
+	</script>
+</body>
+
+</html>
