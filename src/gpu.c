@@ -118,7 +118,7 @@ void *render_shader(void *arg) {
     int fd = open("/dev/dri/card0", O_RDWR);
     if (fd < 0) {
         fprintf(stderr, "Failed to open DRM device\n");
-        return NULL;
+        exit(-1);
     }
 
 
@@ -274,7 +274,5 @@ void *render_shader(void *arg) {
     gbm_surface_destroy(surface);
     gbm_device_destroy(gbm);
     close(fd);
-
-    return 0;
 }
 
