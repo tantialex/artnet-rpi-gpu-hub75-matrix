@@ -364,7 +364,7 @@ typedef struct scene_info {
  * @param scene scene configuration
  * @param do_fps_sync set to true to sync to scene->fps based on current time
  */
-void map_byte_image_to_pwm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
+// void map_byte_image_to_pwm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
 
 /**
  * @brief map an image of RGB or RGBA pixels to a pwm signal with dithering
@@ -377,7 +377,7 @@ void map_byte_image_to_pwm(uint8_t *restrict image, const scene_info *scene, con
  * @param scene scene configuration
  * @param do_fps_sync set to true to sync to scene->fps based on current time
  */
-void map_byte_image_to_pwm_dithered(uint8_t *image, const scene_info *scene, const uint8_t do_fps_sync);
+// void map_byte_image_to_pwm_dithered(uint8_t *image, const scene_info *scene, const uint8_t do_fps_sync);
 void aces_inplace(RGB *in);
 Normal normalize8(const uint8_t in);
 

@@ -66,7 +66,9 @@ void update_bcm_signal_32(
     const uint32_t offset);
 
 
-void map_byte_image_to_pwm_fast(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
+//void map_byte_image_to_pwm_fast(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
+
+void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
 
 /**
  * @brief convert linear RGB to normalized CIE1931 XYZ color space

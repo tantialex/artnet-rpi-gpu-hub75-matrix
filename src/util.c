@@ -333,7 +333,7 @@ scene_info *default_scene(int argc, char **argv) {
     scene->jitter_brightness = true;
 
     scene->bit_depth = 32;
-    scene->pwm_mapper = map_byte_image_to_pwm;
+    scene->pwm_mapper = map_byte_image_to_bcm
     scene->tone_mapper = copy_tone_mapperF;
     scene->brightness = 200;
     scene->motion_blur_frames = 0;
@@ -496,7 +496,7 @@ void *calibrate_panels(void *arg) {
             }
         }
 
-        map_byte_image_to_pwm(image, scene, TRUE);
+        map_byte_image_to_bcm(image, scene, TRUE);
         char ch = getch();
         if (ch == 'a') {
             scene->gamma -= 0.01f;

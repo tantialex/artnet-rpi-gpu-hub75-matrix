@@ -124,7 +124,7 @@ set_pixel32(imageRGBA, 32, 32, 255, 128, 0);
 
 
 
-Users can update either 24bpp RGB or 32bpp RGBA frame buffers directly and then call map_byte_image_to_pwm() after rendering
+Users can update either 24bpp RGB or 32bpp RGBA frame buffers directly and then call map_byte_image_to_bcm() after rendering
 a new frame. Calling this method will translate the RGB data to pwm bit data. pwm data is organized as a multi dimensional
 array of uint32_t data. Each uint32_t stores a bitmask for the r1,r2,g1,g2,b1,b2 pins for the current pixel's bit-plane. There
 is no need to call any other functions as the "render_forever()" code pulls directly from this buffer.
@@ -147,7 +147,7 @@ these values would be precomputed after every frame and toggled for each display
 
 each bit plane (that is a uint32_t with all of the pin toggles for all 3 output ports for a particular pixel on a single 
 bit plane, there are bit_depth number of bit planes per image) is updated atomically in a single write. This means there
-is no need for double buffering to achieve flicker-free display. Simply call map_byte_image_to_pwm with your new image
+is no need for double buffering to achieve flicker-free display. Simply call map_byte_image_to_bcm with your new image
 buffer as often as you like. The data will be overwritten and the new PWM data will be updated immediately. This allows you
 to draw to the display at up to 9600Hz (depending on the number of chained displays) however frame rates of about 120fps seem 
 to produce excellent results and higher frame rates have diminishing returns after that.
