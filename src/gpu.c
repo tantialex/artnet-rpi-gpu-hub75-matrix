@@ -96,7 +96,7 @@ static GLuint create_shadertoy_program(char *file) {
     }
 
     char *src_with_header = (char *)malloc(filesize + 8192);
-    if (sec_with_header == NULL) {
+    if (src_with_header == NULL) {
         die("unable to allocate %d bytes memory for shader program\n", filesize + 8192);
     }
     snprintf(src_with_header, filesize + 8192, shadertoy_header, src);
@@ -120,6 +120,7 @@ static GLuint create_shadertoy_program(char *file) {
     glDeleteShader(vertex_shader);
     glDeleteShader(fragment_shader);
 
+    free(src_with_header);
     return program;
 }
 
@@ -308,7 +309,6 @@ void *render_shader(void *arg) {
     gbm_device_destroy(gbm);
 
     free(pixelsA);
-    free(src_with_header);
     close(fd);
 }
 

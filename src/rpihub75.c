@@ -106,8 +106,11 @@ void check_scene(const scene_info *scene) {
     if (scene->stride != 3 && scene->stride != 4) { 
         die("Only 3 or 4 byte stride supported\n");
     }
-    if (scene->pwm_signalA == NULL && scene->pwm_signalB == NULL) {
-        die("No pwm signal buffers defined\n");
+    if (scene->pwm_signalA == NULL) {
+        die("No pwm signal buffer defined\n");
+    }
+    if (scene->image == NULL) {
+        die("No RGB image buffer defined\n");
     }
     if (scene->bit_depth < 8 || scene->bit_depth > 64) {
         die("Only 8-64 bit depth supported\n");

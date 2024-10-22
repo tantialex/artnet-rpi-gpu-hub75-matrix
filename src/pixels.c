@@ -461,8 +461,7 @@ void update_bcm_signal_32(
     static uint32_t p0t = 0, p0b = 0, p1t = 0, p1b = 0, p2t = 0, p2b =0;
 
     // calculate the image index to all 3 ports. we only need to do this once ever
-    __attribute__((unlikely))
-    if (panel_stride == 0) {
+    if (UNLIKELY(panel_stride == 0)) {
         panel_stride = scene->width * (scene->panel_height / 2);
         p0b = p0t + panel_stride;
         p1t = p0b + panel_stride;
@@ -549,8 +548,7 @@ void update_bcm_signal_64(
     static uint32_t p0t = 0, p0b = 0, p1t = 0, p1b = 0, p2t = 0, p2b =0;
 
     // calculate the image index to all 3 ports. we only need to do this once ever
-    __attribute__((unlikely))
-    if (panel_stride == 0) {
+    if (UNLIKELY(panel_stride == 0)) {
         panel_stride = scene->width * (scene->panel_height / 2);
         p0b = p0t + panel_stride;
         p1t = p0b + panel_stride;
@@ -615,7 +613,7 @@ void update_bcm_signal_64(
 
  
 
-uint64_t *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
+void *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
 
     size_t bytes = 3 * 257 * sizeof(uint64_t);
     _Alignas(64) uint64_t *bits = (uint64_t*)aligned_alloc(64, bytes);
@@ -655,11 +653,11 @@ uint64_t *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
         if (CONSOLE_DEBUG) {
             debug("i: %d, Scale: %f,  Gamma Corrected Scaled: %f, Tone Mapped pwm: ", i, (double)RED_SCALE, (double)gamma_pixel.r, (double)tone_pixel.r);
             if (num_bits <= 32) {
-                uint32_t num = (uint32_t*)&bits[i];
-                binary32(stderr, num);
+                uint32_t *num = (uint32_t *)bits;
+                binary32(stderr, num[i]);
             } else {
-                uint64_t num = (uint64_t*)&bits[i];
-                binary64(stderr, num);
+                uint64_t *num = (uint64_t *)bits;
+                binary64(stderr, num[i]);
             }
             debug("\n");
         }
@@ -684,8 +682,7 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
     static void *bits = NULL;
     static func_tone_mapper_t tone_map = NULL;
 
-    __attribute__((unlikely))
-    if (bits == NULL || tone_map != scene->tone_mapper) {
+    if (UNLIKELY(bits == NULL || tone_map != scene->tone_mapper)) {
         if (bits != NULL) { // don't leak memory!
             free(bits);
         }   
@@ -1214,7 +1211,7 @@ void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uin
     for (int y = y0; y < y1; y++) {
         v_ratio = (float)(y - y0) / (y1 - y0);
 
-        float vertical = gradient.type(y0, y1, x0, x1, v_ratio, h_ratio);
+        float vertical = gradient.type(y0, y1, x0, x1, v_ratio, 0);
         interpolate_rgb(&left, gradient.colorA1, gradient.colorA2, vertical);
         interpolate_rgb(&right, gradient.colorB1, gradient.colorB2, vertical);
 
@@ -1235,7 +1232,6 @@ void hub_circle(scene_info *scene, const uint16_t width, const uint16_t height, 
     int x = radius;
     int y = 0;
     int decisionOver2 = 1 - x; // Decision variable
-    uint8_t *image = scene->image;
 
 
     while (x >= y) {
@@ -1330,9 +1326,9 @@ void hub_line_aa(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
             hub_pixel(scene, x0, y0, color); // Full opacity pixel
             // Set the pixel to the right or left with reduced opacity
             if (sx == 1) {
-                hub_pixel(scene, x0 + 1, y0, (RGB){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
+                hub_pixel_alpha(scene, x0 + 1, y0, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
             } else {
-                hub_pixel(scene, x0 - 1, y0, (RGB){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
+                hub_pixel_alpha(scene, x0 - 1, y0, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
             }
         } else {
             // Vertical line segment
@@ -1342,9 +1338,9 @@ void hub_line_aa(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
             hub_pixel(scene, x0, y0, color); // Full opacity pixel
             // Set the pixel above or below with reduced opacity
             if (sy == 1) {
-                hub_pixel(scene, x0, y0 + 1, (RGB){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
+                hub_pixel_alpha(scene, x0, y0 + 1, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
             } else {
-                hub_pixel(scene, x0, y0 - 1, (RGB){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
+                hub_pixel_alpha(scene, x0, y0 - 1, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
             }
         }
 
@@ -1365,13 +1361,13 @@ void hub_line_aa(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
 
 
 void hub_triangle(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color) {
-    line(scene, x0, y0, x1, y1, color);
-    line(scene, x1, y1, x2, y2, color);
-    line(scene, x2, y2, x0, y0, color);
+    hub_line(scene, x0, y0, x1, y1, color);
+    hub_line(scene, x1, y1, x2, y2, color);
+    hub_line(scene, x2, y2, x0, y0, color);
 }
 
 void hub_triangle_aa(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color) {
-    line_aa(scene, x0, y0, x1, y1, color);
-    line_aa(scene, x1, y1, x2, y2, color);
-    line_aa(scene, x2, y2, x0, y0, color);
+    hub_line_aa(scene, x0, y0, x1, y1, color);
+    hub_line_aa(scene, x1, y1, x2, y2, color);
+    hub_line_aa(scene, x2, y2, x0, y0, color);
 }

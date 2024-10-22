@@ -127,7 +127,7 @@ void binary32(FILE *fd, const uint32_t number) {
 void binary64(FILE *fd, const uint64_t number) {
     // Print the number in binary format, ensure it only shows 11 bits
     for (int i = 63; i >= 0; i--) {
-        fprintf(fd, "%lld", (number >> i) & 1);
+        fprintf(fd, "%ld", (number >> i) & 1);
     }
 }
 

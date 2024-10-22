@@ -12,6 +12,9 @@
 #ifndef _GPIO_H
 #define _GPIO_H 1
 
+#define LIKELY(x)   __builtin_expect(!!(x), 1)
+#define UNLIKELY(x) __builtin_expect(!!(x), 0)
+
 //////////////////////////////////////////////////////////
 
 #ifndef RED_SCALE

@@ -243,7 +243,7 @@ void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
  * 
  */
 __attribute__((cold))
-uint64_t *tone_map_rgb_bits(const scene_info *scene);
+void *tone_map_rgb_bits(const scene_info *scene, int num_bits);
 
 
 
