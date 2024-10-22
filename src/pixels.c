@@ -1164,18 +1164,28 @@ inline void hub_pixel_alpha(scene_info *scene, int x, int y, RGBA pixel) {
 
 
 /**
- * @brief fill in a rectangle of width,height at x,y with the specified color
+ * @brief fill in a rectangle from x1,y1 to x2,y2. x2,y2 do not need to be > x1,y1
  * 
  * @param scene 
- * @param x 
- * @param y 
- * @param width 
- * @param height 
+ * @param x1
+ * @param y1
+ * @param x2 
+ * @param y2 
  * @param color 
  */
-void hub_fill(scene_info *scene, uint16_t x, uint16_t y, uint16_t width, uint16_t height, RGB color) {
-    for (int y = 0; y < scene->height; y++) {
-        for (int x = 0; x < scene->width; x++) {
+void hub_fill(scene_info *scene, uint16_t x, uint16_t y, uint16_t x2, uint16_t y2, RGB color) {
+    if (x2 > x) {
+        uint16_t temp = x;
+        x = x2;
+        x2 = temp;
+    }
+    if (y2 > y) {
+        uint16_t temp = y;
+        y = y2;
+        y2 = temp;
+    }
+    for (int y = 0; y < y2; y++) {
+        for (int x = 0; x < x2; x++) {
             hub_pixel(scene, x, y, color);
         }
     }

@@ -276,5 +276,7 @@ void hub_triangle(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int
  */
 void hub_triangle_aa(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color);
 
+void hub_fill(scene_info *scene, uint16_t x, uint16_t y, uint16_t x2, uint16_t y2, RGB color);
+
 #endif
 
