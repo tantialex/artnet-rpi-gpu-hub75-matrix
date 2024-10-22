@@ -20,6 +20,54 @@
 #define UNCHART_F 0.30f
 #define UNCHART_W 11.2f  // White point (adjust as needed)
 
+
+/**
+ * @brief function definition to function that maps RGB image data
+ * to BCM data for shifting out to GPIO
+ */
+typedef void (*update_bcm_signal_fn)(
+    const scene_info *scene,
+    const void *bits,  // Use void* to handle both uint32_t* and uint64_t*
+    uint32_t *bcm_signal,
+    const uint8_t *image,
+    const uint32_t offset);
+
+/**
+ * @brief update_bcm_signal_fn implementation for up to 64 bit BCM data
+ * 
+ * @param scene  pointer to current scene info
+ * @param void_bits RGB to BCM index data. Red 0-255, Green 256-511, Blue 512 - 768
+ * @param bcm_signal the ouput buffer to write BCM data to
+ * @param image the input RGB or RGBA image to render
+ * @param offset offset into the bcm buffer
+ */
+void update_bcm_signal_64(
+    const scene_info *scene,
+    const void *__restrict__ void_bits,
+    uint32_t *__restrict__ bcm_signal,
+    const uint8_t *__restrict__ image,
+    const uint32_t offset);
+
+
+/**
+ * @brief update_bcm_signal_fn implementation for up to 32 bit BCM data
+ * 
+ * @param scene 
+ * @param void_bits 
+ * @param bcm_signal 
+ * @param image 
+ * @param offset 
+ */
+void update_bcm_signal_32(
+    const scene_info *scene,
+    const void *__restrict__ void_bits,
+    uint32_t *__restrict__ bcm_signal,
+    const uint8_t *__restrict__ image,
+    const uint32_t offset);
+
+
+void map_byte_image_to_pwm_fast(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
+
 /**
  * @brief convert linear RGB to normalized CIE1931 XYZ color space
  * https://en.wikipedia.org/wiki/CIE_1931_color_space
@@ -197,4 +245,36 @@ void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
 __attribute__((cold))
 uint64_t *tone_map_rgb_bits(const scene_info *scene);
 
+
+
+/**
+ * @brief draw an unfilled triangle using Bresenham's line drawing algorithm
+ * 
+ * @param scene 
+ * @param x0  p0 x
+ * @param y0  p0 y
+ * @param x1  p1 x
+ * @param y1  p2 y
+ * @param x2  p3 x
+ * @param y2  p3 y
+ * @param color 
+ */
+void hub_triangle(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color);
+
+
+/**
+ * @brief draw an unfilled triangle using Xiolin Wu's line drawing algorithm
+ * 
+ * @param scene 
+ * @param x0  p0 x
+ * @param y0  p0 y
+ * @param x1  p1 x
+ * @param y1  p2 y
+ * @param x2  p3 x
+ * @param y2  p3 y
+ * @param color 
+ */
+void hub_triangle_aa(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color);
+
 #endif
+

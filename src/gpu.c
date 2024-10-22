@@ -15,8 +15,8 @@
 #include "rpihub75.h"
 #include "util.h"
 
-// Shader source code
-const char *fragment_shader_source =
+// Test Shader source code
+const char *test_shader_source =
     "#version 310 es\n"
     "precision mediump float;\n"
     "out vec4 color;\n"
@@ -24,7 +24,11 @@ const char *fragment_shader_source =
     "    color = vec4(1.0, 0.0, 1.0, 1.0);\n"  // Red color
     "}\n";
 
-const char *fragment_shader_header =
+/**
+ * @brief add inputs for shaderToy glsl shaders
+ * usage: fragment_shader = sprintf(shadertoy_header, shader_source);
+ */
+const char *shadertoy_header =
     "#version 310 es\n"
     "precision mediump float;\n"
     "uniform vec3 iResolution;\n"
@@ -44,7 +48,10 @@ const char *fragment_shader_header =
     "}\n";
 
 
-
+/**
+ * @brief trivial vertex shader. pass vertex directly to the GPU
+ * 
+ */
 const char *vertex_shader_source =
     "#version 310 es\n"
     "in vec4 position;\n"
@@ -52,7 +59,14 @@ const char *vertex_shader_source =
     "    gl_Position = position;\n"
     "}\n";
 
-static GLuint compile_shader(const char *source, GLenum shader_type) {
+/**
+ * @brief helper method for compiling GLSL shaders
+ * 
+ * @param source the source code for the shader
+ * @param shader_type one of GL_VERTEX_SHADER or GL_FRAGMENT_SHADER
+ * @return GLuint reference to the created shader id
+ */
+static GLuint compile_shader(const char *source, const GLenum shader_type) {
     GLuint shader = glCreateShader(shader_type);
     glShaderSource(shader, 1, &source, NULL);
     glCompileShader(shader);
@@ -62,26 +76,30 @@ static GLuint compile_shader(const char *source, GLenum shader_type) {
     if (!success) {
         char info_log[512];
         glGetShaderInfoLog(shader, 512, NULL, info_log);
-        fprintf(stderr, "Shader compilation error: %s\n", info_log);
-        exit(EXIT_FAILURE);
+        die("Shader compilation error: %s\n", info_log);
     }
 
     return shader;
 }
 
-static GLuint create_program(char *file) {
+/**
+ * @brief Create a complete OpenGL program for a shadertoy shader
+ * 
+ * @param file name of the shadertoy file to load
+ * @return GLuint OpenGL id of the new program
+ */
+static GLuint create_shadertoy_program(char *file) {
     long filesize;
     char *src = file_get_contents(file, &filesize);
     if (filesize == 0) {
-        fprintf(stderr, "Failed to read shader source\n");
-        exit(EXIT_FAILURE);
+        die( "Failed to read shader source\n");
     }
 
     char *src_with_header = (char *)malloc(filesize + 8192);
-    snprintf(src_with_header, filesize + 8192, fragment_shader_header, src);
-
-
-    //printf("shader: %s\n", src_with_header);
+    if (sec_with_header == NULL) {
+        die("unable to allocate %d bytes memory for shader program\n", filesize + 8192);
+    }
+    snprintf(src_with_header, filesize + 8192, shadertoy_header, src);
 
     GLuint vertex_shader = compile_shader(vertex_shader_source, GL_VERTEX_SHADER);
     GLuint fragment_shader = compile_shader(src_with_header, GL_FRAGMENT_SHADER);
@@ -96,8 +114,7 @@ static GLuint create_program(char *file) {
     if (!success) {
         char info_log[512];
         glGetProgramInfoLog(program, 512, NULL, info_log);
-        fprintf(stderr, "Program linking error: %s\n", info_log);
-        exit(EXIT_FAILURE);
+        die("Program linking error: %s\n", info_log);
     }
 
     glDeleteShader(vertex_shader);
@@ -106,19 +123,29 @@ static GLuint create_program(char *file) {
     return program;
 }
 
-#define BLUR_FACTOR 1.2f
-#define FRAME_COUNT 5
 
+/**
+ * @brief render the shadertoy compatible shader source code in the 
+ * file pointed to at scene->shader_file
+ * 
+ * exits if shader is unable to be rendered
+ * 
+ * loop exits and memory is freed if/when scene->do_render becomes false
+ * 
+ * frame delay is adaptive and updates to current scene->fps on each frame update
+ * 
+ * 
+ * @param arg pointer to the current scene_info object
+ */
 __attribute__((noreturn))
 void *render_shader(void *arg) {
     const scene_info *scene = (scene_info*)arg;
-    printf("render shader %s\n", scene->shader_file);
+    debug("render shader %s\n", scene->shader_file);
 
     // Open a file descriptor to the DRM device
     int fd = open("/dev/dri/card0", O_RDWR);
     if (fd < 0) {
-        fprintf(stderr, "Failed to open DRM device\n");
-        exit(-1);
+        die("Failed to open DRM device /dev/dri/card0\n");
     }
 
 
@@ -136,7 +163,8 @@ void *render_shader(void *arg) {
     eglInitialize(display, NULL, NULL);
     eglBindAPI(EGL_OPENGL_ES_API);
 
-    // Create EGL context and surface
+    // Create EGL context and surface.
+    // TODO experiment with 565 color
     EGLConfig config;
     EGLint num_configs;
     EGLint attribs[] = {
@@ -150,16 +178,15 @@ void *render_shader(void *arg) {
     };
     eglChooseConfig(display, attribs, &config, 1, &num_configs);
 
-    EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_attribs);//(EGLint[]){EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE});
-    //EGLSurface egl_surface = EGL_NO_SURFACE;//eglCreateWindowSurface(display, config, surface, NULL);
+    EGLContext context = eglCreateContext(display, config, EGL_NO_CONTEXT, context_attribs);
     EGLSurface egl_surface = eglCreateWindowSurface(display, config, (EGLNativeWindowType)surface, NULL);
     eglMakeCurrent(display, egl_surface, egl_surface, context);
 
     // Set up OpenGL ES
-    GLuint program = create_program(scene->shader_file);
+    GLuint program = create_shadertoy_program(scene->shader_file);
     glUseProgram(program);
 
-    // Define a square with two triangles
+    // Define a square with two triangles. This is a rendering surface for our fragment shader
     GLfloat vertices[] = {
         -1.0f,  1.0f, 0.0f,
         -1.0f, -1.0f, 0.0f,
@@ -177,46 +204,53 @@ void *render_shader(void *arg) {
     glVertexAttribPointer(posAttrib, 3, GL_FLOAT, GL_FALSE, 0, 0);
 
 
+    // setup the timers for frame delays
     struct timespec start_time, end_time;
     uint32_t frame_time_us = 1000000 / scene->fps;
     size_t image_buf_sz = scene->width * (scene->height) * sizeof(uint32_t);
-    GLubyte *restrict pixelsA __attribute__((aligned(16))) = (GLubyte*)malloc(image_buf_sz*(MAX(scene->motion_blur_frames+1,10)));  // RGBA format (4 bytes per pixel)
-    // uint32_t *pwm_write = scene->pwm_signalA;
+
+    // RGBA format (4 bytes per pixel)
+    GLubyte *restrict pixelsA __attribute__((aligned(16))) = (GLubyte*)malloc(image_buf_sz*(MAX(scene->motion_blur_frames+1,10)));
+    if (pixelsA == NULL) {
+        die("unable to allocate %d bytes memory for shader frames...\n", image_buf_sz * (MAX(scene->motion_blur_frames+1,10)));
+    }
     GLubyte *pixels = pixelsA;
+
+    // pointer to the current motion blur buffer
     GLubyte *pixelsO = pixelsA+(image_buf_sz * scene->motion_blur_frames+1);
 
+    // uniforms point to information we will pass to the GLSL shader
     GLint timeLocation = glGetUniformLocation(program, "iTime");
     GLint resLocation = glGetUniformLocation(program, "iResolution");
 
 
+    // some variables for each frame iteration
     float motion_blur[scene->motion_blur_frames+1];
     float time = 0.0f;
     unsigned long frame= 0;
     int frame_num = 0;
 
 
-    // calculate motion blur frame weights 
+    // calculate motion blur frame weights  (decreasing frame weights)
     float sum = 0;
     for (int i = 0; i < scene->motion_blur_frames; i++) {
         motion_blur[i] = powf(0.5f, i);  // Exponents symmetric around zero
         sum += motion_blur[i];
     }
 
+    // now average each frame so that the sum of all frames adds to 1.0
     for (int i = 0; i < scene->motion_blur_frames; i++) {
         motion_blur[i] /= sum;
     }
 
 
-
-    for (;;) {
+    // loop until do_render is false. most likely never exit...
+    while(scene->do_render) {
         frame++;
-        time += 0.01f;
+        time += 1.0f / scene->fps;
         clock_gettime(CLOCK_MONOTONIC, &start_time);
         glUseProgram(program);
-        //glUniform1f(timeLocation, (float)start_time.tv_sec + (float)start_time.tv_nsec / 100000000.0f);
-        glUniform1f(timeLocation, (float)frame / scene->fps);
-        //glUniform1f(timeLocation, time);
-        //glUniform1f(timeLocation, (float)start_time.tv_sec + (float)start_time.tv_nsec / 10000.0f);
+        glUniform1f(timeLocation, time);
         glUniform3f(resLocation, scene->width, (scene->width), 0);
 
         // Render
@@ -224,7 +258,6 @@ void *render_shader(void *arg) {
         glClear(GL_COLOR_BUFFER_BIT);
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         eglSwapBuffers(display, egl_surface);
-
 
         // switch between pixels buffers A-F based on frame number
         pixels = pixelsA + (frame_num * image_buf_sz);
@@ -273,6 +306,9 @@ void *render_shader(void *arg) {
     eglTerminate(display);
     gbm_surface_destroy(surface);
     gbm_device_destroy(gbm);
+
+    free(pixelsA);
+    free(src_with_header);
     close(fd);
 }
 

@@ -34,6 +34,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <sys/param.h>
 #include <sys/time.h>
 #include <time.h>
@@ -44,7 +45,6 @@
 
 #include "rpihub75.h"
 #include "util.h"
-
 
 
 /**
@@ -115,9 +115,22 @@ void check_scene(const scene_info *scene) {
     if (scene->motion_blur_frames > 32) {
         die("Max motion blur frames is 32\n");
     }
+
+    if (scene->bit_depth % BIT_DEPTH_ALIGNMENT != 0) {
+        die("requested bit_depth %d, but %d is not aligned to %d bytes\n"
+            "To use this bit depth, you must #define BIT_DEPTH_ALIGNMENT to the\n"
+            "least common denominator of %d\n", 
+            scene->bit_depth, scene->bit_depth, BIT_DEPTH_ALIGNMENT);
+    }
 }
 
 
+/**
+ * @brief you can cause render_forever to exit by updating the value of do_hub65_render pointer
+ * EG:
+ * 
+ * 
+ */
 __attribute__((noreturn))
 void render_forever(const scene_info *scene) {
 
@@ -140,29 +153,42 @@ void render_forever(const scene_info *scene) {
     }
  
     // render pwm image data to the GPIO pins forever...
-    static unsigned int toggle_pwm = 0;
-    for(;;) {
-        uint32_t *pwm_signal = scene->pwm_signalA;//scene->buffer_ptr ? pwm_signalB : pwm_signalA;
-        for (uint8_t pwm=0; pwm<scene->bit_depth; pwm++) {
-            for (int y=0; y<(scene->panel_height/2); y++) {
+    uint16_t toggle_pwm = 0;
+    const uint8_t  half_height __attribute__((aligned(16))) = scene->panel_height / 2;
+    const uint16_t width __attribute__((aligned(16))) = scene->width;
+    const uint8_t  bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+    ASSERT(width % 16 == 0);
+    ASSERT(half_height % 16 == 0);
+    ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+    while(scene->do_render) {
+        const uint32_t *__attribute__((aligned(16))) pwm_signal = scene->pwm_signalA;
+        const uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+
+        // iterate over the bit plane
+        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
+            // for the current bit plane, render the entire frame
+            for (uint16_t y=0; y<half_height; y++) {
                 asm volatile ("" : : : "memory");  // Prevents optimization
 
                 // compute the line address for this row
-                uint32_t address_mask = row_to_address(y);
-                int offset = ((y * scene->width + (0)) * scene->bit_depth) + pwm;
-                for (int x=0; x<scene->width; x++) {
+                const uint32_t address_mask = row_to_address(y);
+                uint32_t offset = ((y * scene->width + (0)) * bit_depth) + pwm;
+                for (uint16_t x=0; x<width; x++) {
                     asm volatile ("" : : : "memory");  // Prevents optimization
+                    // set all bits for clock cycle at once
+                    //rio->Out = pwm_signal[offset] | address_mask | PIN_CLK | jitter_mask[toggle_pwm];
+                    // toggle clock pin low
+                    //rioCLR->Out = PIN_CLK;
 
+                    // set all bits for clock cycle at once, toggle clock low
+                    rio->Out = pwm_signal[offset] | address_mask | jitter_mask[toggle_pwm];
                     // advance the global OE jitter mask 1 frame
                     toggle_pwm = (toggle_pwm + 1) % JITTER_SIZE;
-
-                    // set all bits for clock cycle at once
-                    rio->Out = pwm_signal[offset] | address_mask | PIN_CLK | jitter_mask[toggle_pwm];
-                    // toggle clock pin low
-                    rioCLR->Out = PIN_CLK;
+                    // toggle clock pin high
+                    rioSET->Out = PIN_CLK;
 
                     // advance to the next bit in the pwm signal
-                    offset += scene->bit_depth;
+                    offset += bit_depth;
                 }
                 // make sure enable pin is high (display off) while we are latching data
                 rio->Out = PIN_OE;
@@ -173,153 +199,3 @@ void render_forever(const scene_info *scene) {
         }
     }
 }
-
-
-/*
-int main(int argc, char **argv)
-{
-    // default panel layout and configuration
-    // see this function in util.c for more information on command line parsing
-    scene_info *scene = default_scene(argc, argv);
-
-    // do any hard coding tweaking to scene here...
-
-    // ensure that the scene is valid
-    check_scene(scene);
-
-    
-    // create another thread to run the frame drawing function (GPU or CPU)
-    pthread_t update_thread;
-    // if a shader file is set, use the GPU fragment shader renderer "render_shader"
-	// else, use the cpu renderer: render_cpu, reads the render_cpu brief for how to
-    // render scene data on the CPU.
-    if (scene->gamma == -99.0f) {
-        scene->gamma = 2.0f;
-        pthread_create(&update_thread, NULL, calibrate_panels, scene);
-    } else if (scene->shader_file == NULL) {
-        pthread_create(&update_thread, NULL, render_cpu, scene);
-    } else {
-        pthread_create(&update_thread, NULL, render_shader, scene);
-    }
-
-    // this function will never return
-    render_forever(scene);
-}
-*/
-
-
-/**
- * @brief everything you need to render to HUB75 panels on RPI5
- * 
- * @param argc 
- * @param argv 
- * @return int 
- */
-/*
-int main2(int argc, char **argv)
-{
-
-    char     is_root = 0;
-    // map the gpio address to we can control the GPIO pins
-    uint32_t *PERIBase = map_gpio((is_root) ? 0xD0000 : 0x00000);
-    // offset to the RIO registers (required for #define register access. 
-    // TODO: this needs to be improved and #define to RIOBase removed)
-    uint32_t *RIOBase  = PERIBase + 0x10000 / 4;
-    // configure the pins we need for pulldown, 8ma and output
-    configure_gpio(PERIBase);
-
-
-    // default panel layout and configuration
-    // see this function in util.c for more information on command line parsing
-    scene_info *scene = default_scene(argc, argv);
-
-
-    // create the OE jitter mask to control screen brightness
-    uint32_t *jitter_mask = create_jitter_mask(JITTER_SIZE, scene->brightness);
-    if (scene->jitter_brightness == false) {
-        for (int i=0; i<JITTER_SIZE; i++) {
-            jitter_mask[i] = 0x0;
-        }
-    }
-    
-
-    // 2 32 bit GLOBAL pwm buffers for double buffering
-    // pwm_signal is a 2d array of pwm image data. each 32 bit uint32_t enty is the bit mask for ALL gpio output pins
-    // the signal progresses by 1 bit each iteration, and the entire signal is 32 bits wide (32 bit pwm signal). this is 1 frame.
-    // y offset is calculated by the width of the image * 3 * scene->bit_depth (3 colors, scene->bit_depth bits per color)
-    // x offset is calculated by the (y offset * 3 + x pos) * scene->bit_depth (3 colors, scene->bit_depth bits per color)
-    size_t buffer_size = (scene->width + 1) * (scene->height + 1) * 3 * scene->bit_depth;
-    // force the buffers to be 16 byte aligned to improve auto vectorization
-    scene->pwm_signalA = aligned_alloc(16, buffer_size *4);
-    scene->pwm_signalB = aligned_alloc(16, buffer_size *4);
- 
-    // ensure that the scene is valid
-    check_scene(scene);
-
-    
-    // create another thread to run the frame drawing function (GPU or CPU)
-    pthread_t update_thread;
-    // if a shader file is set, use the GPU fragment shader renderer "render_shader"
-	// else, use the cpu renderer: render_cpu, reads the render_cpu brief for how to
-    // render scene data on the CPU.
-    if (scene->gamma == -99.0f) {
-        scene->gamma = 2.0f;
-        pthread_create(&update_thread, NULL, calibrate_panels, scene);
-    } else if (scene->shader_file == NULL) {
-        pthread_create(&update_thread, NULL, render_cpu, scene);
-    } else {
-        pthread_create(&update_thread, NULL, render_shader, scene);
-    }
-
-    // render pwm image data to the GPIO pins forever...
-    static unsigned int toggle_pwm = 0;
-    for(;;) {
-        uint32_t *pwm_signal = scene->pwm_signalA;//scene->buffer_ptr ? pwm_signalB : pwm_signalA;
-        scene->buffer_ptr = !scene->buffer_ptr;
-        for (uint8_t pwm=0; pwm<scene->bit_depth; pwm++) {
-            for (int y=0; y<(scene->panel_height/2); y++) {
-                asm volatile ("" : : : "memory");  // Prevents optimization
-
-                // compute the line address for this row
-                uint32_t address_mask = row_to_address(y);
-                int offset = ((y * scene->width + (0)) * scene->bit_depth) + pwm;
-                for (int x=0; x<scene->width; x++) {
-                    asm volatile ("" : : : "memory");  // Prevents optimization
-
-                    // advance the global OE jitter mask 1 frame
-                    toggle_pwm = (toggle_pwm + 1) % JITTER_SIZE;
-
-                    // set all bits for clock cycle at once
-                    rio->Out = pwm_signal[offset] | address_mask | PIN_CLK | jitter_mask[toggle_pwm];
-                    //rioXOR->Out = PIN_OE;
-                    // toggle clock pin low
-                    rioCLR->Out = PIN_CLK;
-
-                    // advance to the next bit in the pwm signal
-                    offset += scene->bit_depth;
-                }
-                // make sure enable pin is high (display off) while we are latching data
-                rio->Out = PIN_OE;
-                // latch the data for the entire row
-                rioSET->Out = PIN_LATCH;
-                rioCLR->Out = PIN_LATCH;
-            }
-        }
-
-        //printf("frame\n");
-    }
-
-
-    // release memory
-    if (scene != NULL) {
-        if (scene->pwm_signalA != NULL) {
-            free (scene->pwm_signalA);
-        }
-        if (scene->pwm_signalB != NULL) {
-            free (scene->pwm_signalB);
-        }
-        free(scene);
-    }
-    return (EXIT_SUCCESS);
-}
-*/

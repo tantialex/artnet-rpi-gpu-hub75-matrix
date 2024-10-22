@@ -1,19 +1,44 @@
 This library implements HUB75 protocol on the rpi5
 ==================================================
 
-This is based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
+This is loosely based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html)
 
-BitBang HUB75 data at 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel. Supports up to 3 ports per clock
-cycle (18 pixels worth of on/off data per clock cycle). Supports updating frame data at any moment so frame rates
-of >120Hz are easily possible. Support for up to 64bits of pwm data (1/64 pwm cycle for 64 different color levels
-for each RGB value). No hardware clocks are required for operation so you can run the code with only group gpio
+Glossary
+--------
+*PWM* modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
+
+*BCM* modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
+
+Overview
+--------
+BitBang HUB75 data at steady 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel. Supports up to 3 ports with 2 pixels 
+per port per clock cycle. Double buffering of frame data is handled by the library. Support for 24bpp RGB and 32bpp RGBA
+source image data. Frame rates of >120Hz with 64 bits of BCM data are easily possible with chain lengths of 3 or more. 
+Support for up to 64bits of binary code modulation data (1/64 pwm cycle for 64 different color levels for each RGB value).
+
+GPU support using Linux's Generic Buffer Manager (gbm), GLESv2 and EGL is also included. This means you can use 
+OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included in the shaders
+directory.
+
+Multiple tone mapping implementations are provided including ACES, reinhard, and exposure as well as saturation and 
+contrast controls. Tone mapping compresses the upper and lower end of the linear sRGB data to provide a more natural
+and balanced image on the LED panel. You can implement your own tone mapping by implementing the func_tone_mapper_t
+function and setting it in the active "scene_info". Tone mapping changes take effect on the next frame update and 
+do not add any delay after initial BCM mapping. 
+
+Gamma correction is also provided. Global gamma can be controlled on the command line. Each red, green and blue color
+channel also has its own gamma correction to help improve color balance. In practice gamma of about 2.2 produces
+generally good results. red, green and blue gamma are multiplied against base gamma for each color channel so for 
+color balanced panels, these should all be set to 1 as #define in the header files.
+
+Linear color correction is also provided. You can linearly add + or - red, green and blue to the color channels 
+by adjusting these values in the scene controls. This will effect the generated BCM data that is mapped on every frame.
+
+No hardware clocks are required for operation so you can run the code with only group gpio
 privileges. Operation is mostly flicker free, however, you should see the improved response by running with nice -n -20
 and running the real-time PREEMPT_RT patch on the kernel (6.6) as of this writing. PREEMPT_RT is mainline in 6.12
 so hopefully no patches are required on the next raspbian release!
-
-I have included GPU support using Linux's Generic Buffer Manager (gbm), GLESv2 and EGL. This means you can use 
-OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included.
 
 This implementation only supports rpi5 at the moment. It should be simple to add support for other PIs as only
 the memory-mapped peripheral address for the GPIO pins is required. Preliminary GPIO peripheral offsets are in
@@ -43,12 +68,12 @@ pin. data for one row is now latched. we advance the address row lines drop the 
 and begin the process again.
 
 
-Overview
---------
+Operation:
+----------
 The library bit bangs the data out to the HUB75 panel at a steady 20Mhz. This is significantly faster on my scope than
 hzeller's implementation by up to 10x. The software forks a thread that pulls from the pwm data and continuously pulses 
-the rgb pins and the clock line.  After each row, Output Enable pin is driven high and the data is latched and the next
-row is advanced. After 32 rows (or 1/2 panel height) are written to all 3 ports, the pwm buffer is advanced and the 
+the rgb pins and the clock line. After each row, Output Enable pin is driven high and the data is latched and the next
+row is advanced. After 32 rows (or 1/2 panel height) are written to all 3 ports, the BCM buffer is advanced and the 
 update begins again for the next "bit plane".
 
 Since we are clocking in 2 rows of RGB data per clock cycle (R1, R2, G1, G2, B1, B2) at 20Mhz it takes 2048 clock cycles
@@ -56,8 +81,13 @@ to shift in data for 1 64x64 panel. This translates to a single 64x64 panel refr
 4 panels together per port at >2400Hz. 
 
 Rather than call "SetPixel", you draw directly to a 24bpp or 32bpp buffer and then call this library's function
-map_byte_image_to_pwm() to translate the 24bpp RGB buffer to the pwm signal. Example:
+map_byte_image_to_bcm() to translate the 24bpp RGB buffer to the bcm signal. The buffer that this function writes the BCM
+data is read from on another thread via the render_forever() method.
 
+The render_forever() method will run until scene->do_render is set to false.
+
+Example:
+--------
 ```c
 scene_info *scene = default_scene(argc, argv);
 // example scene->stride is 3 for 24bpp (3 bytes per pixel)
@@ -299,7 +329,7 @@ pwm_mapping function for the scene. (see func_pwm_mapper_t)
      -v                vertical mirror image
      -m                mirror output image
      -i <mapper>       image mapper (u, image mapper not completed yet)
-     -t <tone_mapper>  (aces, reinhard, habble)
+     -t <tone_mapper>  (aces, reinhard, hable)
      -z                run LED calibration script
      -n                display data from UDP server on port 22222
      -h                this help
@@ -318,6 +348,27 @@ There is some code to achieve this but I have not had the results I would like t
 If this is something you are interested in, drop me a line, send me a link to relevant information implementations or send
 a PR.
 
+I am currently investigating chaining multiple rp2040 chips to multiple chains of HUB75 panels to improve the image 
+stability and the number of supported chained panels. Current thinking is rpi5 has 2 spi lines which are capable of 50Mhz
+operation. Split between 4 rp2040s that allows for 25Mhz data update to each rp2040. With 8 panels attached to each rp2040
+we could address 32 panels with 100Mhz total bandwidth. If we down sample frame data to a 256 color palette, we can send
+data to 1 pixel as a single byte. This would allow us to send a single frame of 8 panels in 32KB. at 60fps we have 1.9MB/s
+per rp2040. This data can be sent at 16Mhz. This could allow us to send SPI data to up to 6 rp2040 chips at 16Mhz each
+and 60fps with 8 panels on each rp2040.
+
+The frame data would have a 256 entry 32bcm pallette for a total of 1024 bytes at the beginning on the frame describing
+the 256 colors in the frame's pallette. each pixel could then be sent as a single byte as a lookup to the pallette color.
+This would allow us to send data 3x faster to the rp2040 chips.
+
+Once frame data was loaded on the rp2040 chip. pio would use a lookup table from raw frame bytes to bcm data and shift out
+to the 6 color registers on the current BCM cycle. This data format would allow us to store a huge amount of image data in
+the rp2040 256KB sRAM which still maintaining good color response and excellent refresh rates. This method would also allow
+us to shift in data faster than the pi5 20Mhz upper limit on GPIO and clock data in at the limit of the HUB75 panels (32-40Mhz)
+
+So far I have only been working on the math to see if this makes any sense. Since it seems possible I might make a rp2040 
+implementation and see if 50Mhz bandwidth is achievable over grounded cat5e. After that, programming the PIO to perform the
+BCM pallete lookup and shit out the data at 20Mhz+ will be the final test to see if this is a viable method of controlling
+additional panels at a high refresh rate.
 
 Compiler Flags
 --------------

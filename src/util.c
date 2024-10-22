@@ -127,7 +127,7 @@ void binary32(FILE *fd, const uint32_t number) {
 void binary64(FILE *fd, const uint64_t number) {
     // Print the number in binary format, ensure it only shows 11 bits
     for (int i = 63; i >= 0; i--) {
-        fprintf(fd, "%ld", (number >> i) & 1);
+        fprintf(fd, "%lld", (number >> i) & 1);
     }
 }
 
@@ -304,7 +304,7 @@ void usage(int argc, char **argv) {
         "     -v                vertical mirror image\n"
         "     -m                mirror output image\n"
         "     -i <mapper>       image mapper (u)\n"
-        "     -t <tone_mapper>  (aces, reinhard, habble)\n"
+        "     -t <tone_mapper>  (aces, reinhard, hable)\n"
         "     -z                run LED calibration script\n"
         "     -n                display data from UDP server on port %d\n"
         "     -h                this help\n", argv[0], SERVER_PORT);
@@ -408,12 +408,12 @@ scene_info *default_scene(int argc, char **argv) {
                 scene->tone_mapper = aces_tone_mapperF;
             } else if (strcmp(optarg, "reinhard") == 0) {
                 scene->tone_mapper = reinhard_tone_mapperF;
-            } else if (strcmp(optarg, "habble") == 0) {
+            } else if (strcmp(optarg, "hable") == 0) {
                 scene->tone_mapper = hable_tone_mapperF;
             } else if (strcmp(optarg, "none") == 0) {
                 scene->tone_mapper = copy_tone_mapperF;
             } else {
-                die("Unknown tone mapper: %s, must be one of (aces, reinhard, habble, none)\n", optarg);
+                die("Unknown tone mapper: %s, must be one of (aces, reinhard, hable, none)\n", optarg);
             }
             break;
         case 'i':
@@ -421,7 +421,7 @@ scene_info *default_scene(int argc, char **argv) {
                 debug("set U mapper\n");
                 scene->image_mapper = u_mapper_impl;
             } else {
-                die("Unknown tone mapper: %s, must be one of (aces, reinhard, habble, none)\n", optarg);
+                die("Unknown tone mapper: %s, must be one of (aces, reinhard, hable, none)\n", optarg);
             }
             break;
         default:
@@ -432,6 +432,7 @@ scene_info *default_scene(int argc, char **argv) {
     size_t buffer_size = (scene->width + 1) * (scene->height + 1) * 3 * scene->bit_depth;
     // force the buffers to be 16 byte aligned to improve auto vectorization
     scene->pwm_signalA = aligned_alloc(16, buffer_size * 4);
+    scene->image = aligned_alloc(16, scene->width * scene->height * 4); // make sure we always have enough for RGBA
 
     return scene;
 }

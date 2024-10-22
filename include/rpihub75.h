@@ -13,37 +13,56 @@
 #define _GPIO_H 1
 
 //////////////////////////////////////////////////////////
-/*
-#define RED_SCALE 1.0f
-#define GREEN_SCALE 0.48f
-#define BLUE_SCALE 0.61f
 
-#define RED_GAMMA_SCALE 1.2f
-#define GREEN_GAMMA_SCALE 0.92f
-#define BLUE_GAMMA_SCALE 0.87f
-
-
-r.99, g.99, b1.0
-rg, 1.0, gg .95, bg .92
-
-*/
-
-
+#ifndef RED_SCALE
 #define RED_SCALE 0.99f
+#endif
+
+#ifndef GREEN_SCALE
 #define GREEN_SCALE 1.04f
+#endif
+
+#ifndef BLUE_SCALE
 #define BLUE_SCALE 1.0f
+#endif
 
+#ifndef RED_GAMMA_SCALE
 #define RED_GAMMA_SCALE 1.0f
+#endif
+
+#ifndef GREEN_GAMMA_SCALE
 #define GREEN_GAMMA_SCALE 1.0f
+#endif
+
+#ifndef BLUE_GAMMA_SCALE
 #define BLUE_GAMMA_SCALE 0.92f
+#endif
 
+#ifndef GAMMA
 #define GAMMA 1.99f
+#endif
 
 
+#ifndef PANEL_WIDTH
 #define PANEL_WIDTH 64
-#define PANEL_HEIGHT 64
+#endif
+#ifndef PANEL_HEIGHT
+#define PANEL_HEIGHT PANEL_WIDTH 
+#endif
+#ifndef IMG_WIDTH
 #define IMG_WIDTH 64
+#endif
+#ifndef IMG_HEIGHT
 #define IMG_HEIGHT 64
+#endif
+
+// ideally you should use aligned bit_depth
+//  for bit depths of 16,32,48,64 use BIT_DEPTH_ALIGNMENT 16
+//  for bit depths of 8,16,24,32,40,48,56,64, use BIT_DEPTH_ALIGNMENT 8
+//  for bit depths of 4,8,12,16,20,24,28..., use BIT_DEPTH_ALIGNMENT 4
+//  for bit depths of 2,4,6,8,10,.... use BIT_DEPTH_ALIGNMENT 2
+//  for all others use BIT_DEPTH_ALIGNMENT 1
+#define BIT_DEPTH_ALIGNMENT 16
 
 #define SERVER_PORT 22222
 
@@ -191,6 +210,26 @@ typedef struct {
     Normal b; 
 } RGBF;
 
+
+/**
+ * @brief a gradient function defines the direction of the gradient
+ * you can implement your own gradient function and pass it to the gradient struct
+ */
+typedef float (*Gradient_func)(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r1, float r2);
+
+/**
+ * @brief define a gradient between two colors, the blending will be defined
+ * in the direction of type
+ * 
+ */
+typedef struct {
+    RGB colorA1;
+    RGB colorA2;
+    RGB colorB1;
+    RGB colorB2;
+    Gradient_func type;
+} Gradient;
+
 /**
  * @brief network packet structure
  * 
@@ -257,7 +296,7 @@ typedef struct scene_info {
     uint32_t *restrict pwm_signalA __attribute__((aligned(16)));
 
     /** * @brief see buffer_ptr for usage */
-    uint32_t *restrict pwm_signalB __attribute__((aligned(16)));
+    uint8_t *image __attribute__((aligned(16)));
 
     /** @brief a shader file to render on the GPU */
     char *shader_file;
@@ -305,6 +344,11 @@ typedef struct scene_info {
     Normal green_linear;
     Normal blue_linear;
 
+    /**
+     * @brief boolean flag to indicate that render_forever should exit.
+     */
+    bool do_render;
+
 } scene_info;
 
 
@@ -343,7 +387,7 @@ void reinhard_tone_mapper(const RGB *in, RGB *out);
 void reinhard_tone_mapperF(const RGBF *in, RGBF *out);
 
 Normal hable_tone_map(const Normal color);
-void habble_inplace(RGB *in);
+void hable_inplace(RGB *in);
 void adjust_contrast_saturation_inplace(RGBF *__restrict__ in, const float contrast, const float saturation);
 uint8_t* u_mapper(const uint8_t *image, uint8_t *output_image, const scene_info *scene);
 
