@@ -9,6 +9,7 @@
  * ./example -w 128 -h 128 -p 2 -c 2 -d 48 -b 192 -g 2.2 -f 120 -s shaders/cartoon.glsl
  *
  */
+#define ENABLE_ASSEERTS 1
 
 #include <pthread.h>
 #include <rpihub75/rpihub75.h>
@@ -83,17 +84,20 @@ void* render_cpu(void *arg) {
 
 
 // XXX fix
-        uint16_t x1 = ri(255);
-        uint16_t x2 = ri(255);
-        uint16_t y1 = ri(h-8);
-        uint16_t y2 = y1 + ri(h-y1);
+        uint16_t x1 = ri(60);//ri(255);
+        uint16_t x2 = ri(60);//ri(255);
+        uint16_t x3 = ri(60);//ri(255);
+        uint16_t y1 = ri(60);
+        uint16_t y2 = ri(60);
+        uint16_t y3 = ri(60);
+
         RGB color = {ri(250), ri(250), ri(250)};
 
         // draw random square - this function is provided by rpihub75 library
         //draw_square(image, scene->width, scene->height, scene->stride);
 
         //printf("fill %dx%d - %dx%d\n", x1, y1, x2, y2);
-        hub_fill(scene, x1, y1, x2, y2, color); 
+        //hub_fill(scene, x1, y1, x2, y2, color); 
         //hub_fill(scene, 1, 1, 2, 2, color); 
         //hub_pixel(scene, 0, 1, color);
         /*
@@ -102,6 +106,10 @@ void* render_cpu(void *arg) {
         img[off+1] = 50;
         img[off+2] = 250;
         */
+        Gradient g = {{250, 0, 0}, {0, 250, 0}, {250, 0, 250}, {0, 0, 250}, gradient_quad};
+        hub_fill_grad(scene, 10, 10, 30, 30, g);
+
+        //hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color);
 
         // render the RGB data to the active PWM buffers. sleep delay the frame to sync with scene->fps
         //PRE_TIME

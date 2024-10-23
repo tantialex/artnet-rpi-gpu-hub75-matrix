@@ -694,7 +694,7 @@ void map_byte_image_to_bcm(scene_info *scene, const uint8_t *image, const uint8_
     ASSERT(pwm_stride % BIT_DEPTH_ALIGNMENT == 0);
     ASSERT(width % 32 == 0);                        // Ensure length is a multiple of 32
     // loop over 1/2 of the panel height
-    const uint32_t *bcm_signal = (scene->bcm_ptr)
+    uint32_t *bcm_signal = (scene->bcm_ptr)
         ? (scene->bcm_signalA)
         : (scene->bcm_signalB);
 
@@ -879,24 +879,35 @@ void apply_noise_dithering(uint8_t *image, int width, int height) {
 }
 
 
-float gradient_horiz(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4) {
-    return (p1 - p3) / (p2 - p4);
+float gradient_horiz(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r0, float r1) {
+    return r0;//(p1 - p3) / (p2 - p4);
+}
+float gradient_vert(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r0, float r1) {
+    return r1;//(p1 - p2) / (p3 - p4);
+}
+float gradient_max(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r0, float r1) {
+    return MAX(r0, r1);//(p1 - p2) / (p3 - p4);
+}
+float gradient_min(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r0, float r1) {
+    return MIN(r0, r1);//(p1 - p2) / (p3 - p4);
+}
+float gradient_quad(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4, float r0, float r1) {
+    return (r0 < r1) ? r0 / r1 : r1 / r0;
 }
 
-float gradient_vert(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4) {
-    return (p1 - p2) / (p3 - p4);
-}
 
 /**
- * @brief helper method to set a pixel in a 32 bit RGBA image buffer
+ * @brief helper method to set a pixel in a 24 bpp RGB image buffer
  * 
  * @param scene the scene to draw the pixel at
- * @param x horizontal position (starting at 0)
- * @param y vertical position (starting at 0)
+ * @param x horizontal position (starting at 0) clamped to scene->width
+ * @param y vertical position (starting at 0) clamped to scene->height
  * @param pixel RGB value to set at pixel x,y
  */
 inline void hub_pixel(scene_info *scene, const int x, const int y, const RGB pixel) {
-    int offset = (y * scene->width + x) * scene->stride;
+    const uint16_t fx = MIN(x, scene->width-1);
+    const uint16_t fy = MIN(y, scene->height-1);
+    const int offset = (fy * scene->width + fx) * scene->stride;
     ASSERT(offset < scene->width * scene->height * scene->stride);
 
     scene->image[offset] = pixel.r;
@@ -904,9 +915,32 @@ inline void hub_pixel(scene_info *scene, const int x, const int y, const RGB pix
     scene->image[offset + 2] = pixel.b;
 }
 
+/**
+ * @brief helper method to set a pixel in a 24 bpp RGB image buffer, each
+ * rgb channel is scaled by factor. if scaling exceeds byte storage (255)
+ * the value will wrap. saturated artithmatic is still not portable....
+ * 
+ * @param scene the scene to draw the pixel at
+ * @param x horizontal position (starting at 0)
+ * @param y vertical position (starting at 0)
+ * @param pixel RGB value to set at pixel x,y
+ */
+inline void hub_pixel_factor(scene_info *scene, const int x, const int y, const RGB pixel, const float factor) {
+    const uint16_t fx = MIN(x, scene->width-1);
+    const uint16_t fy = MIN(y, scene->height-1);
+    const int offset = (fy * scene->width + fx) * scene->stride;
+    ASSERT(offset < scene->width * scene->height * scene->stride);
+
+    scene->image[offset] = pixel.r * factor;
+    scene->image[offset + 1] = pixel.g * factor;
+    scene->image[offset + 2] = pixel.b * factor;
+}
+
+
 
 /**
  * @brief helper method to set a pixel in a 32 bit RGBA image buffer
+ * NOTE: You probably wand hub_pixel_factor for most cases
  * 
  * @param scene the scene to draw the pixel at
  * @param x horizontal position (starting at 0)
@@ -914,8 +948,10 @@ inline void hub_pixel(scene_info *scene, const int x, const int y, const RGB pix
  * @param pixel RGB value to set at pixel x,y
  */
 inline void hub_pixel_alpha(scene_info *scene, const int x, const int y, const RGBA pixel) {
+    const uint16_t fx = MIN(x, scene->width-1);
+    const uint16_t fy = MIN(y, scene->height-1);
+    const int offset = (fy * scene->width + fx) * scene->stride;
     ASSERT(scene->stride == 4);
-    int offset = (y * scene->width + x) * scene->stride;
     ASSERT(offset < scene->width * scene->height * scene->stride);
 
     Normal alpha = normalize8(pixel.a);
@@ -938,10 +974,10 @@ inline void hub_pixel_alpha(scene_info *scene, const int x, const int y, const R
  * @param color 
  */
 void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uint16_t x2, const uint16_t y2, const RGB color) {
-    uint16_t fx1 = x1 % scene->width;
-    uint16_t fx2 = x2 % scene->width;
-    uint16_t fy1 = y1 % scene->height;
-    uint16_t fy2 = y2 % scene->height;
+    uint16_t fx1 = x1 % scene->width-1;
+    uint16_t fx2 = x2 % scene->width-1;
+    uint16_t fy1 = y1 % scene->height-1;
+    uint16_t fy2 = y2 % scene->height-1;
 
     if (fx2 < fx1) {
         uint16_t temp = fx1;
@@ -971,18 +1007,19 @@ void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uin
  * @param color 
  */
 void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, Gradient gradient) {
-    if (x1 > x0) {
+    if (x1 < x0) {
         uint16_t temp = x0;
         x0 = x1;
         x1 = temp;
     }
-    if (y1 > y0) {
+    if (y1 < y0) {
         uint16_t temp = y0;
         y0 = y1;
         y1 = temp;
     }
     ASSERT(y1 < scene->height);
     ASSERT(x1 < scene->width);
+    printf("%dx%d, %dx%d\n", x0, y0, x1, y1);
 
 
     RGB left, right, final;
@@ -990,14 +1027,17 @@ void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uin
     for (int y = y0; y < y1; y++) {
         v_ratio = (float)(y - y0) / (y1 - y0);
 
-        float vertical = gradient.type(y0, y1, x0, x1, v_ratio, 0);
+        //float vertical = gradient.type(y0, y1, x0, x1, v_ratio, 0);
+        float vertical = gradient.type(x0, y0, x1, y1, v_ratio, 0);
         interpolate_rgb(&left, gradient.colorA1, gradient.colorA2, vertical);
         interpolate_rgb(&right, gradient.colorB1, gradient.colorB2, vertical);
 
-        for (int x = 0; x < scene->width; x++) {
+        for (int x = x0; x < x1; x++) {
             h_ratio = (float)(x - x0) / (x1 - x0);
 
+            //float horizontal = gradient.type(y0, y1, x0, x1, v_ratio, h_ratio);
             float horizontal = gradient.type(y0, y1, x0, x1, v_ratio, h_ratio);
+            printf("v: %f, h: %f\n", vertical, horizontal);
             interpolate_rgb(&final, left, right, horizontal);
 
             hub_pixel(scene, x, y, final);
@@ -1074,7 +1114,7 @@ void hub_line(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
 
 
 /**
- * @brief draw an anti-aliased line using Xiolin Wu's line drawing algorithm
+ * @brief draw an anti-aliased line using Xiolin Wu's anti-aliased line drawing algorithm
  * 
  * @param scene 
  * @param x0 start pixel x location
@@ -1083,62 +1123,96 @@ void hub_line(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
  * @param y1 end pixel y
  * @param color color to draw the line
  */
-void hub_line_aa(scene_info *scene, int x0, int y0, int x1, int y1, RGB color) {
-    // Calculate the differences
-    int dx = abs(x1 - x0);
-    int dy = abs(y1 - y0);
-    int sx = (x0 < x1) ? 1 : -1; // Step in the x direction
-    int sy = (y0 < y1) ? 1 : -1; // Step in the y direction
+void hub_line_aa(scene_info *scene, const int x0, const int y0, const int x1, const int y1, const RGB color) {
 
-    // Determine the primary direction
-    int err = dx - dy;
+    int fx0 = MIN(x0, scene->width-1);
+    int fx1 = MIN(x1, scene->width-1);
+    int fy0 = MIN(y0, scene->height-1);
+    int fy1 = MIN(y1, scene->height-1);
 
-    // Draw the line
-    while (1) {
-        // Calculate brightness for anti-aliasing
-        int alpha = 255; // Default opacity for the pixel
-        if (dx > dy) {
-            // Horizontal line segment
-            float gradient = (float)dy / (float)dx; // Calculate the gradient
-            float y_frac = y0 + gradient * (sx == 1 ? 0.5f : -0.5f); // Half pixel adjustment
+    float dx = (float)(fx1 - fx0);
+    float dy = (float)(fy1 - fy0);
+    
+    int steep = fabs(dy) > fabs(dx);
+    
+    if (steep) {
+        // Swap x and y
+        int tmp;
+        tmp = fx0; fx0 = fy0; fy0 = tmp;
+        tmp = fx1; fx1 = fy1; fy1 = tmp;
+        dx = (float)(fx1 - fx0);
+        dy = (float)(fy1 - fy0);
+    }
+    
+    if (fx0 > fx1) {
+        // Swap (fx0, fy0) with (fx1, fy1)
+        int tmp;
+        tmp = fx0; fx0 = fx1; fx1 = tmp;
+        tmp = fy0; fy0 = fy1; fy1 = tmp;
+        dx = (float)(fx1 - fx0);
+        dy = (float)(fy1 - fy0);
+    }
 
-            hub_pixel(scene, x0, y0, color); // Full opacity pixel
-            // Set the pixel to the right or left with reduced opacity
-            if (sx == 1) {
-                hub_pixel_alpha(scene, x0 + 1, y0, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
-            } else {
-                hub_pixel_alpha(scene, x0 - 1, y0, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (y_frac - y0)))});
-            }
-        } else {
-            // Vertical line segment
-            float gradient = (float)dx / (float)dy; // Calculate the gradient
-            float x_frac = x0 + gradient * (sy == 1 ? 0.5f : -0.5f); // Half pixel adjustment
+    float gradient = (dx == 0.0f) ? 1.0f : dy / dx;
 
-            hub_pixel(scene, x0, y0, color); // Full opacity pixel
-            // Set the pixel above or below with reduced opacity
-            if (sy == 1) {
-                hub_pixel_alpha(scene, x0, y0 + 1, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
-            } else {
-                hub_pixel_alpha(scene, x0, y0 - 1, (RGBA){color.r, color.g, color.b, (uint8_t)(alpha * (1 - (x_frac - x0)))});
-            }
+    // Handle the first endpoint
+    float xend = roundf(fx0);
+    float yend = fy0 + gradient * (xend - fx0);
+    float xgap = rfpart(fx0 + 0.5f);
+    int xpxl1 = (int)xend;
+    int ypxl1 = ipart(yend);
+    if (steep) {
+        hub_pixel_factor(scene, ypxl1, xpxl1, color, rfpart(yend) * xgap);
+        hub_pixel_factor(scene, ypxl1 + 1, xpxl1, color, fpart(yend) * xgap);
+    } else {
+        hub_pixel_factor(scene, xpxl1, ypxl1, color, rfpart(yend) * xgap);
+        hub_pixel_factor(scene, xpxl1, ypxl1 + 1, color, fpart(yend) * xgap);
+    }
+    float intery = yend + gradient;  // First y-intersection for the main loop
+
+    // Handle the second endpoint
+    xend = roundf(fx1);
+    yend = fy1 + gradient * (xend - fx1);
+    xgap = fpart(fx1 + 0.5f);
+    int xpxl2 = (int)xend;
+    int ypxl2 = ipart(yend);
+    if (steep) {
+        hub_pixel_factor(scene, ypxl2, xpxl2, color, rfpart(yend) * xgap);
+        hub_pixel_factor(scene, ypxl2 + 1, xpxl2, color, fpart(yend) * xgap);
+    } else {
+        hub_pixel_factor(scene, xpxl2, ypxl2, color, rfpart(yend) * xgap);
+        hub_pixel_factor(scene, xpxl2, ypxl2 + 1, color, fpart(yend) * xgap);
+    }
+
+    // Main loop
+    if (steep) {
+        for (int x = xpxl1 + 1; x < xpxl2; x++) {
+            hub_pixel_factor(scene, ipart(intery), x, color, rfpart(intery));
+            hub_pixel_factor(scene, ipart(intery) + 1, x, color, fpart(intery));
+            intery += gradient;
         }
-
-        // Check if we've reached the end point
-        if (x0 == x1 && y0 == y1) break;
-
-        int err2 = err * 2;
-        if (err2 > -dy) {
-            err -= dy;
-            x0 += sx;
-        }
-        if (err2 < dx) {
-            err += dx;
-            y0 += sy;
+    } else {
+        for (int x = xpxl1 + 1; x < xpxl2; x++) {
+            hub_pixel_factor(scene, x, ipart(intery), color, rfpart(intery));
+            hub_pixel_factor(scene, x, ipart(intery) + 1, color, fpart(intery));
+            intery += gradient;
         }
     }
 }
 
 
+/**
+ * @brief  draw an un-anti aliased triangle
+ * 
+ * @param scene 
+ * @param x0 
+ * @param y0 
+ * @param x1 
+ * @param y1 
+ * @param x2 
+ * @param y2 
+ * @param color 
+ */
 void hub_triangle(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color) {
     hub_line(scene, x0, y0, x1, y1, color);
     hub_line(scene, x1, y1, x2, y2, color);
