@@ -384,8 +384,50 @@ Compiler Flags
 investigation:
 blue noise dithering
 
-sudo apt update upgrade
+
+From a new raspibian lite system. install rpi-gpu-hub75-matrix and linux realtime kernel for
+silky smooth hub75 panels
+
+``` bash
 sudo apt update
+sudo apt upgrade
 sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
 sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
 
+git clone https://github.com/bitslip6/rpi-gpu-hub75-matrix
+cd rpi-gpu-hub75-matrix
+# assumes you are using hzellers adaptive board or comaptible port mappings
+# edit include/rpihub75.h and edit teh #define for pin mapping if using a differnt board or pin configuration
+make
+sudo make install
+gcc example.c -O3 -lrpihub75_gpu -o example
+# render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
+./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
+
+
+# real time kernel patch to remove any flicker:
+# compile real-time patch for rpi5 6.6 kernel
+# make sure these instructions are updated, visit https://raspberrypi.com/documentation/computers/linux_kernel.html#building
+
+mkdir kernel
+git clone --depth=1 --branch rpi-6.6.y https:/github.com/raspberrypi/linux
+wget https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-6.6.35-rt34.patch.gz
+cd linux
+zcat ../patch-6.6.35-rt34.patch.gz | patch -p1 --dry-run # make sure patch applies correctly
+zcat ../patch-6.6.35-rt34.patch.gz | patch -p1
+KERNEL=kernel_2712                                       # use kernel_8 for rpi1-4
+make bcm2712_defconfig                                   # use bcm2711_defconfig for rpi1-4 
+
+make menuconfig                                          # General -> Preemption Model -> select Real Time option
+vi .config                                               # custome CONFIG_LOCALVERSION (helps you identify your kernel when runing uname -a)
+make -j4 Image.gs modules dtbs
+# wait about 30-45 minutes
+echo $KERNEL
+sudo make -j4 modules_install
+sudo cp /boot/firmware/$KERNEL.img /boot/firmware/$KERNEL-backup.img
+sudo cp arch/arm64/boot/Image.gz /boot/firmware/$KERNEL.img
+sudo cp arch/arm64/boot/dts/broadcom/*.dtb /boot/firmware/
+sudo cp arch/arm64/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
+sudo cp arch/arm64/boot/dts/overlays/README /boot/firmware/overloays/
+sudo reboot
+```

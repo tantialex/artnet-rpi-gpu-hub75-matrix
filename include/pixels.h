@@ -29,7 +29,7 @@ typedef void (*update_bcm_signal_fn)(
     const scene_info *scene,
     const void *bits,  // Use void* to handle both uint32_t* and uint64_t*
     uint32_t *bcm_signal,
-    uint8_t *image);
+    const uint8_t *image);
     // XXX FIX
     //const uint8_t *image);
 
@@ -46,7 +46,7 @@ void update_bcm_signal_64(
     const scene_info *scene,
     const void *__restrict__ void_bits,
     uint32_t *__restrict__ bcm_signal,
-    uint8_t *images);
+    const uint8_t *__restrict__ images);
     // XXX fix
     //const uint8_t *__restrict__ image,
     //const uint32_t offset);

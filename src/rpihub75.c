@@ -182,7 +182,7 @@ void render_forever(const scene_info *scene) {
     while(scene->do_render) {
 
         // iterate over the bit plane
-        PRE_TIME;
+        //PRE_TIME;
         for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
             // for the current bit plane, render the entire frame
             uint32_t offset = pwm;
@@ -212,14 +212,12 @@ void render_forever(const scene_info *scene) {
                 rioCLR->Out = PIN_LATCH;
             }
 
-            // check every 8 updates for new frame data, swap the BCM source if a new frame was loaded 
-            //if (pwm % 8 == 1) {
-                if (UNLIKELY(scene->bcm_ptr != last_pointer)) {
-                    last_pointer = scene->bcm_ptr;
-                    bcm_signal = (last_pointer) ? scene->bcm_signalB : scene->bcm_signalA;
-                }
-            //}
+            // swap the buffers on vsync
+            if (UNLIKELY(scene->bcm_ptr != last_pointer)) {
+                last_pointer = scene->bcm_ptr;
+                bcm_signal = (last_pointer) ? scene->bcm_signalB : scene->bcm_signalA;
+            }
         }
-        POST_TIME;
+        //POST_TIME;
     }
 }
