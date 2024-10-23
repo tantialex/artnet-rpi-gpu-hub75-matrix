@@ -73,6 +73,7 @@ install: all
 	cp include/rpihub75.h $(INCLUDEDIR)
 	cp include/util.h $(INCLUDEDIR)
 	cp include/gpu.h $(INCLUDEDIR)
+	cp include/pixels.h $(INCLUDEDIR)
 	# Copy libraries
 	cp $(LIB_NO_GPU) $(LIB_GPU) $(LIBDIR)
 	ldconfig

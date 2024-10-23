@@ -6,12 +6,20 @@
 #ifndef _UTIL_H
 #define _UTIL_H 1
 
+/**
+ * @brief used to set the pin mode of a GPIO pin using mmaped /dev/gpiomem0 
+ * 
+ */
 typedef struct{
     uint32_t status;
     uint32_t ctrl; 
 }GPIOregs;
 #define GPIO ((GPIOregs*)GPIOBase)
 
+/**
+ * @brief helper struct for accessing the RIO registers of a GPIO pin
+ * 
+ */
 typedef struct
 {
     uint32_t Out;
@@ -21,7 +29,17 @@ typedef struct
 } rioregs;
 
 
+/**
+ * @brief printf() a message to stderr and exit with a non-zero status
+ * 
+ * @param message 
+ * @param ... 
+ */
 void die(const char *message, ...);
+
+/**
+ * display a message to stderr if CONSOLE_DEBUG is defined 
+ */
 void debug(const char *format, ...);
 uint32_t *create_jitter_mask(uint16_t jitter_size, uint8_t brightness);
 int file_put_contents(const char *filename, const void *data, size_t size);

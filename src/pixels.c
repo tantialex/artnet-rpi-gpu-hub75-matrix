@@ -14,6 +14,7 @@
 #include <time.h>
 #include <math.h>
 #include <string.h>
+#include <assert.h>
 
 
 #include "rpihub75.h"
@@ -303,6 +304,10 @@ void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out) {
 
 
 
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+
 /**
  * @brief map an input byte to a 32 bit pwm signal
  * 
@@ -313,20 +318,23 @@ uint32_t byte_to_bcm32(const uint8_t input, const uint8_t num_bits) {
 
     // Calculate the number of '1's in the 11-bit result based on the 8-bit input
     uint32_t num_ones = (input * num_bits) / 255;  // Map 0-255 input to 0-num_bits ones
-    uint32_t pwm_signal = 0;
+    uint32_t bcm_signal = 0;
 
     // dont divide by 0!
     if (num_ones == 0) {
-        return pwm_signal;
+        if (input < 1) {
+            return bcm_signal;
+        }
     }
+    num_ones++;
 
     float step = (float)num_bits / (float)num_ones;  // Step for evenly distributing 1's
     for (uint16_t i = 0; i < num_ones; i++) {
         int shift = (int)(i * step);
-        pwm_signal |= (1 << (shift));
+        bcm_signal |= (1 << (shift));
     }
 
-    return pwm_signal;
+    return bcm_signal;
 }
 
 
@@ -341,120 +349,49 @@ uint64_t byte_to_bcm64(const uint8_t input, const uint8_t num_bits) {
     // Calculate the number of '1's in the 11-bit result based on the 8-bit input
     uint16_t i1 = input;  // make sure we use at least 16 bits for the multiplication
     uint8_t num_ones = (i1 * num_bits) / 255;  // Map 0-255 input to 0-num_bits ones
-    uint64_t pwm_signal = 0;
+    uint64_t bcm_signal = 0;
 
     // dont divide by 0!
     // make sure we get some 1s in there!
     if (num_ones == 0) {
         if (input < 1) {
-            return pwm_signal;
+            return bcm_signal;
         }
     }
     // don't output black unless the input is actually 0.
     // this ensures we always have at least 1 bit set
     num_ones++;
 
-
     // now we will calculate the step size and place a 1 every step bits
     float step = (float)num_bits / (float)num_ones;  // Step for evenly distributing 1's
     for (uint16_t i = 0; i < num_ones; i++) {
         int shift = (int)(i * step);
-        pwm_signal |= (1ULL << (shift));
+        bcm_signal |= (1ULL << (shift));
     }
 
-    return pwm_signal;
+    return bcm_signal;
 }
 
 
-/**
- * @brief  map 2 pixels to pwm signal using classic bit plane method
- * 
- * 
- * I have experimented with intrinsics and NEON, but the code was only a bit faster
- * NEON was about .45ms faster per frame, or about 33-40ms savings per second.  
- * i don't think it's worth the hassle to maintain.
- * 
- * @param pwm_signal 
- * @param scene 
- * @param pixel_upper 
- * @param pixel_lower 
- */
-__attribute__((hot))
-inline void update_pwm_signal_classic(uint32_t *__restrict__ pwm_signal, const uint8_t bit_depth, const RGB *__restrict__ pixel_upper, const RGB *__restrict__ pixel_lower, const uint8_t port_off, const uint64_t *__restrict__ bits, const uint32_t pwm_clear_mask) {
-
-    const static uint32_t PORT[24] = {
-        (1 << ADDRESS_P0_R1), (1 << ADDRESS_P0_R2), (1 << ADDRESS_P0_G1), (1 << ADDRESS_P0_G2), (1 << ADDRESS_P0_B1), (1 << ADDRESS_P0_B2),
-        (1 << ADDRESS_P0_R1), (1 << ADDRESS_P0_R2), (1 << ADDRESS_P0_G1), (1 << ADDRESS_P0_G2), (1 << ADDRESS_P0_B1), (1 << ADDRESS_P0_B2),
-        (1 << ADDRESS_P1_R1), (1 << ADDRESS_P1_R2), (1 << ADDRESS_P1_G1), (1 << ADDRESS_P1_G2), (1 << ADDRESS_P1_B1), (1 << ADDRESS_P1_B2),
-        (1 << ADDRESS_P2_R1), (1 << ADDRESS_P2_R2), (1 << ADDRESS_P2_G1), (1 << ADDRESS_P2_G2), (1 << ADDRESS_P2_B1), (1 << ADDRESS_P2_B2)
-    };
-
-    // cant compute this in the loop or it confuses the vectorizer....
-    const static uint64_t mask_lookup[80] = {
-        1ULL << 0, 1ULL << 1, 1ULL << 2, 1ULL << 3, 1ULL << 4, 1ULL << 5, 1ULL << 6, 1ULL << 7,
-        1ULL << 8, 1ULL << 9, 1ULL << 10, 1ULL << 11, 1ULL << 12, 1ULL << 13, 1ULL << 14, 1ULL << 15,
-        1ULL << 16, 1ULL << 17, 1ULL << 18, 1ULL << 19, 1ULL << 20, 1ULL << 21, 1ULL << 22, 1ULL << 23,
-        1ULL << 24, 1ULL << 25, 1ULL << 26, 1ULL << 27, 1ULL << 28, 1ULL << 29, 1ULL << 30, 1ULL << 31,
-        1ULL << 32, 1ULL << 33, 1ULL << 34, 1ULL << 35, 1ULL << 36, 1ULL << 37, 1ULL << 38, 1ULL << 39,
-        1ULL << 40, 1ULL << 41, 1ULL << 42, 1ULL << 43, 1ULL << 44, 1ULL << 45, 1ULL << 46, 1ULL << 47,
-        1ULL << 48, 1ULL << 49, 1ULL << 50, 1ULL << 51, 1ULL << 52, 1ULL << 53, 1ULL << 54, 1ULL << 55,
-        1ULL << 56, 1ULL << 57, 1ULL << 58, 1ULL << 59, 1ULL << 60, 1ULL << 61, 1ULL << 62, 1ULL << 63
-    };
-
-
-
-    // bits are pre-computed in a lookup table for the pwm values for each pixel value
-    // each bit plane is 32 bits long and computed separately for each color channel
-    uint64_t r1_pwm = bits[pixel_upper->r];
-    uint64_t r2_pwm = bits[pixel_lower->r];
-    uint64_t g1_pwm = bits[pixel_upper->g+256];
-    uint64_t g2_pwm = bits[pixel_lower->g+256];
-    uint64_t b1_pwm = bits[pixel_upper->b+512];
-    uint64_t b2_pwm = bits[pixel_lower->b+512];
-
-    const uint32_t *port = PORT+ port_off;
-
-    uint8_t offset = 0;
-    for (int j=0; j<bit_depth; j++) {
-        // mask off just this bit plane's data
-        uint64_t mask = mask_lookup[j];
-
-        // clear just the bits on this port for this bit plane so we don't accidentally clear 
-        // bits for the other rgb ports
-        // Set the bits if the pwm value is set for this bit plane using bitmask instead of ternary
-        // the clear_mask sets all bits for other ports to 1 so that we don't interfere with the other ports
-
-        pwm_signal[offset] = (pwm_signal[offset] & pwm_clear_mask) |
-            (port[0] & (uint64_t)-(!!(r1_pwm & mask))) |
-            (port[1] & (uint64_t)-(!!(r2_pwm & mask))) |
-            (port[2] & (uint64_t)-(!!(g1_pwm & mask))) |
-            (port[3] & (uint64_t)-(!!(g2_pwm & mask))) |
-            (port[4] & (uint64_t)-(!!(b1_pwm & mask))) |
-            (port[5] & (uint64_t)-(!!(b2_pwm & mask)));
-        offset++;
-    }
-}
 
 /**
- * @brief map 6 pixels of to pwm data. supports 3 ouput ports with 2 pixels per port
+ * @brief map 6 pixels of to bcm data. supports 3 output ports with 2 pixels per port
  * 
  * @param scene the scene information
- * @param bits pointer to the gamma corrected tone mapped pwm data for each RGB value
- * @param pwm_signal pointer to the pwm data for current X/Y. (y = 0 - panel_height/2)
- * @param image pointer to 24bpp RGB or 32bpp RGBA image data
- * @param offset pointer to the RGB value in the image for the pixel being mapped
+ * @param void_bits pointer to the gamma corrected tone mapped pwm data for each RGB value. (uint32_t !)
+ * @param pwm_signal pointer to the bcm data for current X/Y. (y = 0 - panel_height/2), scene->bit_depth bytes will be updated here
+ * @param image pointer to 24bpp RGB or 32bpp RGBA image data at the current pixel offset. IE: image[offset]
  */
 __attribute__((hot))
 void update_bcm_signal_32(
     const scene_info *scene,
     const void *__restrict__ void_bits,
-    uint32_t *__restrict__ pwm_signal,
-    const uint8_t *__restrict__ image,
-    const uint32_t offset) {
+    uint32_t *__restrict__ bcm_signal,
+    const uint8_t *__restrict__ image) {
 
     const uint32_t *bits = (const uint32_t*)void_bits;
     // offset to the Port0 top pixel image
-    uint32_t img_idx = offset;
+    //uint32_t img_idx = offset;
     // offset from top pixel to lower pixel in image data. 
     static uint32_t panel_stride = 0;
     // offsets for each pixel on each port
@@ -462,7 +399,7 @@ void update_bcm_signal_32(
 
     // calculate the image index to all 3 ports. we only need to do this once ever
     if (UNLIKELY(panel_stride == 0)) {
-        panel_stride = scene->width * (scene->panel_height / 2);
+        panel_stride = scene->width * (scene->panel_height / 2) * scene->stride;
         p0b = p0t + panel_stride;
         p1t = p0b + panel_stride;
         p1b = p1t + panel_stride;
@@ -475,50 +412,56 @@ void update_bcm_signal_32(
     uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
 
     ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+    ASSERT(bit_depth <= 32);
+
+    uint8_t bcm_offset = 0;
     for (int j=0; j<bit_depth; j++) {
         // mask off just this bit plane's data
-        uint32_t mask = 1ULL << j;
+        const uint32_t mask = 1 << j;
 
         // this works by first finding the index into the red byte (+0) of the 24bpp source image
-        // looking up the pwm bit mask value at that red color value (128 = 1010101010101..), logical AND with
-        // the current bit position we are calculating (j) and then shifting that bit (0 or 1) to the correct pin
-        // and set that value for the current pwm_signal offset.
+        // looking up the bcm bit mask value at that red color value (128 = 1010101010101..), logical AND with
+        // the current bit position we are calculating (1<<j) and then shifting that bit (0 or 1) to the correct pin (ADDRESS_Px_CX)
+        // and logical OR that value for the current bcm_signal offset.
         // repeat this for green (+1), blue (+2), and once for each pixel on each port
 
-        // pwm_signal[offset] holds 6 pixels values, port0 top, port0 bottom, port1 top, port1 bottom, etc..
-        pwm_signal[offset] = 
+        // !! - first ! turns 00100000 into 0000000, second ! turns 000000 into 00000001
+        // !! - first ! turns 00000000 into 0000001, second ! turns 000001 into 00000000
+        // this way we get a 1 value for the mask of the (bcm_bits & mask) so we can << the correct number of bits
+
+        bcm_signal[bcm_offset++] =
             // PORT 0, top pixel
-            ((bits[image[img_idx+p0t+0]] & mask) << ADDRESS_P0_R1) |
-            ((bits[image[img_idx+p0t+1]] & mask) << ADDRESS_P0_G1) |
-            ((bits[image[img_idx+p0t+2]] & mask) << ADDRESS_P0_B1) |
+            (!!(bits[image[0]] & mask)) << ADDRESS_P0_R1 |
+            (!!(bits[image[1]] & mask)) << ADDRESS_P0_G1 |
+            (!!(bits[image[2]] & mask)) << ADDRESS_P0_B1 |
 
             // PORT 0, bottom pixel
-            ((bits[image[img_idx+p0b+0]] & mask) << ADDRESS_P0_R2) |
-            ((bits[image[img_idx+p0b+1]] & mask) << ADDRESS_P0_G2) |
-            ((bits[image[img_idx+p0b+2]] & mask) << ADDRESS_P0_B2) |
-
-            // PORT 1, top pixel
-            ((bits[image[img_idx+p1t+0]] & mask) << ADDRESS_P1_R1) |
-            ((bits[image[img_idx+p1t+1]] & mask) << ADDRESS_P1_G1) |
-            ((bits[image[img_idx+p1t+2]] & mask) << ADDRESS_P1_B1) |
+            (!!(bits[image[p0b+0]] & mask)) << ADDRESS_P0_R2 |
+            (!!(bits[image[p0b+1]] & mask)) << ADDRESS_P0_G2 |
+            (!!(bits[image[p0b+2]] & mask)) << ADDRESS_P0_B2 |
 
             // PORT 1, bottom pixel
-            ((bits[image[img_idx+p1b+0]] & mask) << ADDRESS_P1_R2) |
-            ((bits[image[img_idx+p1b+1]] & mask) << ADDRESS_P1_G2) |
-            ((bits[image[img_idx+p1b+2]] & mask) << ADDRESS_P1_B2) |
+            (!!(bits[image[p1t+0]] & mask)) << ADDRESS_P1_R1 |
+            (!!(bits[image[p1t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p1t+2]] & mask)) << ADDRESS_P1_B1 |
 
-            // PORT 2, top pixel
-            ((bits[image[img_idx+p2t+0]] & mask) << ADDRESS_P2_R1) |
-            ((bits[image[img_idx+p2t+1]] & mask) << ADDRESS_P2_G1) |
-            ((bits[image[img_idx+p2t+2]] & mask) << ADDRESS_P2_B1) |
+            // PORT 1, bottom pixel
+            (!!(bits[image[p1b+0]] & mask)) << ADDRESS_P1_R2 |
+            (!!(bits[image[p1b+1]] & mask)) << ADDRESS_P1_G2 |
+            (!!(bits[image[p1b+2]] & mask)) << ADDRESS_P1_B2 |
 
             // PORT 2, bottom pixel
-            ((bits[image[img_idx+p2b+0]] & mask) << ADDRESS_P2_R2) |
-            ((bits[image[img_idx+p2b+1]] & mask) << ADDRESS_P2_G2) |
-            ((bits[image[img_idx+p2b+2]] & mask) << ADDRESS_P2_B2);
-    }
+            (!!(bits[image[p2t+0]] & mask)) << ADDRESS_P1_R1 |
+            (!!(bits[image[p2t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p2t+2]] & mask)) << ADDRESS_P1_B1 |
 
-    // pwm_signal is now bit mask of length bit_depth for these 6 pixels that can be iterated through to light
+            // PORT 2, bottom pixel
+            (!!(bits[image[p2b+0]] & mask)) << ADDRESS_P2_R2 |
+            (!!(bits[image[p2b+1]] & mask)) << ADDRESS_P2_G2 |
+            (!!(bits[image[p2b+2]] & mask)) << ADDRESS_P2_B2;
+
+    }
+    // bcm_signal is now bit mask of length bit_depth for these 6 pixels that can be iterated through to light
     // the LEDS to the correct brightness levels
 }
 
@@ -527,7 +470,7 @@ void update_bcm_signal_32(
  * 
  * @param scene the scene information
  * @param bits pointer to the gamma corrected tone mapped pwm data for each RGB value
- * @param pwm_signal pointer to the pwm data for current X/Y. (y = 0 - panel_height/2)
+ * @param bcm_signal pointer to the pwm data for current X/Y. (y = 0 - panel_height/2)
  * @param image pointer to 24bpp RGB or 32bpp RGBA image data
  * @param offset pointer to the RGB value in the image for the pixel being mapped
  */
@@ -535,13 +478,11 @@ __attribute__((hot))
 void update_bcm_signal_64(
     const scene_info *scene,
     const void *__restrict__ void_bits,
-    uint32_t *__restrict__ pwm_signal,
-    const uint8_t *__restrict__ image,
-    const uint32_t offset) {
+    uint32_t *__restrict__ bcm_signal,
+    uint8_t *__restrict__ image) {
 
     const uint64_t *bits = (const uint64_t*)void_bits;
     // offset to the Port0 top pixel image
-    uint32_t img_idx = offset;
     // offset from top pixel to lower pixel in image data. 
     static uint32_t panel_stride = 0;
     // offsets for each pixel on each port
@@ -549,7 +490,7 @@ void update_bcm_signal_64(
 
     // calculate the image index to all 3 ports. we only need to do this once ever
     if (UNLIKELY(panel_stride == 0)) {
-        panel_stride = scene->width * (scene->panel_height / 2);
+        panel_stride = scene->width * (scene->panel_height / 2) * scene->stride;
         p0b = p0t + panel_stride;
         p1t = p0b + panel_stride;
         p1b = p1t + panel_stride;
@@ -562,9 +503,10 @@ void update_bcm_signal_64(
     uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
 
     ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+    uint8_t bcm_offset = 0;
     for (int j=0; j<bit_depth; j++) {
         // mask off just this bit plane's data
-        uint64_t mask = 1ULL << j;
+        uint64_t mask = 1UL << j;
 
         // this works by first finding the index into the red byte (+0) of the 24bpp source image
         // looking up the pwm bit mask value at that red color value (128 = 1010101010101..), logical AND with
@@ -573,36 +515,36 @@ void update_bcm_signal_64(
         // repeat this for green (+1), blue (+2), and once for each pixel on each port
 
         // pwm_signal[offset] holds 6 pixels values, port0 top, port0 bottom, port1 top, port1 bottom, etc..
-        pwm_signal[offset] = 
+        pwm_signal[bcm_offset] = 
             // PORT 0, top pixel
-            ((bits[image[img_idx+p0t+0]] & mask) << ADDRESS_P0_R1) |
-            ((bits[image[img_idx+p0t+1]] & mask) << ADDRESS_P0_G1) |
-            ((bits[image[img_idx+p0t+2]] & mask) << ADDRESS_P0_B1) |
+            (!!(bits[image[p0t+0]] & mask)) << ADDRESS_P0_R1 |
+            (!!(bits[image[p0t+1]] & mask)) << ADDRESS_P0_G1 |
+            (!!(bits[image[p0t+2]] & mask)) << ADDRESS_P0_B1 |
 
             // PORT 0, bottom pixel
-            ((bits[image[img_idx+p0b+0]] & mask) << ADDRESS_P0_R2) |
-            ((bits[image[img_idx+p0b+1]] & mask) << ADDRESS_P0_G2) |
-            ((bits[image[img_idx+p0b+2]] & mask) << ADDRESS_P0_B2) |
+            (!!(bits[image[p0b+0]] & mask)) << ADDRESS_P0_R2 |
+            (!!(bits[image[p0b+1]] & mask)) << ADDRESS_P0_G2 |
+            (!!(bits[image[p0b+2]] & mask)) << ADDRESS_P0_B2 |
 
             // PORT 1, top pixel
-            ((bits[image[img_idx+p1t+0]] & mask) << ADDRESS_P1_R1) |
-            ((bits[image[img_idx+p1t+1]] & mask) << ADDRESS_P1_G1) |
-            ((bits[image[img_idx+p1t+2]] & mask) << ADDRESS_P1_B1) |
+            ((bits[image[p1t+0]] & mask) << ADDRESS_P1_R1) |
+            ((bits[image[p1t+1]] & mask) << ADDRESS_P1_G1) |
+            ((bits[image[p1t+2]] & mask) << ADDRESS_P1_B1) |
 
             // PORT 1, bottom pixel
-            ((bits[image[img_idx+p1b+0]] & mask) << ADDRESS_P1_R2) |
-            ((bits[image[img_idx+p1b+1]] & mask) << ADDRESS_P1_G2) |
-            ((bits[image[img_idx+p1b+2]] & mask) << ADDRESS_P1_B2) |
+            ((bits[image[p1b+0]] & mask) << ADDRESS_P1_R2) |
+            ((bits[image[p1b+1]] & mask) << ADDRESS_P1_G2) |
+            ((bits[image[p1b+2]] & mask) << ADDRESS_P1_B2) |
 
             // PORT 2, top pixel
-            ((bits[image[img_idx+p2t+0]] & mask) << ADDRESS_P2_R1) |
-            ((bits[image[img_idx+p2t+1]] & mask) << ADDRESS_P2_G1) |
-            ((bits[image[img_idx+p2t+2]] & mask) << ADDRESS_P2_B1) |
+            ((bits[image[p2t+0]] & mask) << ADDRESS_P2_R1) |
+            ((bits[image[p2t+1]] & mask) << ADDRESS_P2_G1) |
+            ((bits[image[p2t+2]] & mask) << ADDRESS_P2_B1) |
 
             // PORT 2, bottom pixel
-            ((bits[image[img_idx+p2b+0]] & mask) << ADDRESS_P2_R2) |
-            ((bits[image[img_idx+p2b+1]] & mask) << ADDRESS_P2_G2) |
-            ((bits[image[img_idx+p2b+2]] & mask) << ADDRESS_P2_B2);
+            ((bits[image[p2b+0]] & mask) << ADDRESS_P2_R2) |
+            ((bits[image[p2b+1]] & mask) << ADDRESS_P2_G2) |
+            ((bits[image[p2b+2]] & mask) << ADDRESS_P2_B2);
     }
 
     // pwm_signal is now bit mask of length bit_depth for these 6 pixels that can be iterated through to light
@@ -612,13 +554,32 @@ void update_bcm_signal_64(
 
 
  
+/**
+ * @brief create a bcm signal map from linear sRGB space to the bcm(pwm) signal.
+ * the returned pointer will be either uint32_t* or uint64_t* depending on the size
+ * of num_bits.
+ * 
+ * each bcm entry will be a right aligned bit mask of length num_bits.
+ * 
+ * looking up any linear 8 bit value in the map will return a BCM bit mask of length num_bits
+ * 
+ * @param scene contains reference to jitter_brightness, gamma, 
+ * brightness, red_linear, green_linear, blue_linear, red_gamma, green_gamma, blue_gamma, 
+ * bit_depth, tone_mapper.
+ * @param num_bits  number of bits of BCM data (good values from 8-64) try to make them multiples of 4 or 8
+ * @return void* pointer to the bcm signal map. 0-255 red, 256-511 green, 512-767 blue
+ */
+void *tone_map_rgb_bits(const scene_info *scene, const int num_bits) {
+    ASSERT(num_bits <= 64);
 
-void *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
-
+    //size_t bytes = 3 * 257 * sizeof(uint64_t);
+    //_Alignas(64) uint64_t *bits = (uint64_t*)aligned_alloc(64, bytes);
     size_t bytes = 3 * 257 * sizeof(uint64_t);
-    _Alignas(64) uint64_t *bits = (uint64_t*)aligned_alloc(64, bytes);
+    _Alignas(32) uint32_t *bits = (uint32_t*)aligned_alloc(32, bytes);
     memset(bits, 0, bytes);
 
+    uint64_t *bits64 = (uint64_t *)bits;
+    uint32_t *bits32 = (uint32_t *)bits;
     uint8_t brightness = (scene->jitter_brightness) ? 255 : scene->brightness;
     for (uint16_t i=0; i<=255; i++) {
         RGBF tone_pixel = {0, 0 , 0};
@@ -627,7 +588,7 @@ void *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
             normal_gamma_correct(normalize8(MIN(i, 255)) * scene->green_linear, scene->gamma*scene->green_gamma),
             normal_gamma_correct(normalize8(MIN(i, 255)) * scene->blue_linear, scene->gamma*scene->blue_gamma)
         };
-        debug("i: %d: R:%f  G:%f B:%f\n", i, (double)gamma_pixel.r, (double)gamma_pixel.g, (double)gamma_pixel.b);
+        // debug("i: %d: R:%f  G:%f B:%f\n", i, (double)gamma_pixel.r, (double)gamma_pixel.g, (double)gamma_pixel.b);
 
         // tone map the value ...
         if (scene->tone_mapper != NULL) {
@@ -639,15 +600,14 @@ void *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
         }
 
         if (num_bits > 32 && num_bits <= 64) {
-            uint64_t *bits64 = (uint64_t *)bits;
             bits64[i]     = byte_to_bcm64(MIN(tone_pixel.r * brightness, 255), scene->bit_depth);
             bits64[i+256] = byte_to_bcm64(MIN(tone_pixel.g * brightness, 255), scene->bit_depth);
             bits64[i+512] = byte_to_bcm64(MIN(tone_pixel.b * brightness, 255), scene->bit_depth);
         } else if (num_bits <= 32) {
-            uint32_t *bits32 = (uint32_t *)bits;
             bits32[i]     = byte_to_bcm32(MIN(tone_pixel.r * brightness, 255), scene->bit_depth);
             bits32[i+256] = byte_to_bcm32(MIN(tone_pixel.g * brightness, 255), scene->bit_depth);
             bits32[i+512] = byte_to_bcm32(MIN(tone_pixel.b * brightness, 255), scene->bit_depth);
+
         }
 
         if (CONSOLE_DEBUG) {
@@ -663,16 +623,26 @@ void *tone_map_rgb_bits(const scene_info *scene, int num_bits) {
         }
     }
 
-    return bits;
+    if (num_bits <= 32) {
+        printf("return bits32\n");
+        return bits32;
+    }
+    return bits64;
 }
 
 
 
 /**
  * @brief this function takes the image data and maps it to the bcm signal.
+ * 
+ * if scene->tone_mapper is updated, new bcm bit masks will be created.
+ * 
+ * @param scene the scene information
+ * @param image the image to map to the scene bcm data. if NULL scene->image will be used
+ * @param do_fps_sync if true, the function will attempt to usleep delay sync to the scene->fps
  */
 __attribute__((hot))
-void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync) {
+void map_byte_image_to_bcm(scene_info *scene, const uint8_t *image, const uint8_t do_fps_sync) {
 
 	// get the current time and estimate fps delay
     const uint32_t frame_time_us = 1000000 / scene->fps;
@@ -680,9 +650,9 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
 
     // tone map the bits for the current scene, update if the lookup table if scene tone mapping changes....
     static void *bits = NULL;
-    static func_tone_mapper_t tone_map = NULL;
+    static func_tone_mapper_t last_tone_map = NULL;
 
-    if (UNLIKELY(bits == NULL || tone_map != scene->tone_mapper)) {
+    if (UNLIKELY(bits == NULL || last_tone_map != scene->tone_mapper)) {
         if (bits != NULL) { // don't leak memory!
             free(bits);
         }   
@@ -691,7 +661,8 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
         } else {
             bits = (uint32_t*)tone_map_rgb_bits(scene, scene->bit_depth);
         }
-        tone_map = scene->tone_mapper;
+        last_tone_map = scene->tone_mapper;
+        debug("new tone mapped bits created\n");
     }
 
     // map the image to handle weird panel chain configurations
@@ -702,6 +673,7 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
         scene->image_mapper(image, NULL, scene);
     }
 
+    uint8_t *image_ptr = (image == NULL) ? scene->image : image;
 
     // use the correct bcm_signal mapper, 32 or 64 bit
     update_bcm_signal_fn update_bcm_signal = (scene->bit_depth > 32)
@@ -710,37 +682,41 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
 
     ASSERT(scene->panel_height % 16 == 0);
     ASSERT(scene->panel_width % 16 == 0);
-
-    uint32_t offset = 0;
     // pwm_stride is the row length in bytes of the pwm output data
-    uint32_t pwm_stride __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->width * scene->bit_depth;
+    //uint32_t pwm_stride __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->width * scene->bit_depth;
+    const uint32_t pwm_stride = scene->width * scene->bit_depth;
     // half_height is 1/2 the panel height. since we clock in 2 pixels at a time, 
     // we only need to process half the rows
-    uint8_t  half_height __attribute__((aligned(16))) = scene->panel_height / 2;
+    const uint8_t  half_height __attribute__((aligned(16))) = scene->panel_height / 2;
     // ensure 16 bit alignment for width
-    uint16_t width __attribute__((aligned(32))) = scene->width;
+    const uint16_t width __attribute__((aligned(32))) = scene->width;
 
     // ensure alignment for the compiler to optimize these loops
     ASSERT(scene->bit_depth % BIT_DEPTH_ALIGNMENT == 0);
     ASSERT(half_height % 16 == 0);
     ASSERT(pwm_stride % BIT_DEPTH_ALIGNMENT == 0);
+    ASSERT(width % 32 == 0);                        // Ensure length is a multiple of 32
     // loop over 1/2 of the panel height
+    uint32_t *bcm_signal = (scene->bcm_ptr)
+        ? (scene->bcm_signalA)
+        : (scene->bcm_signalB);
+
     for (uint16_t y=0; y < half_height; y++) {
         // for clarity: calculate the offset into the PWM buffer for the first pixel in this row
-        unsigned int pwm_offset = y * pwm_stride;
+        //unsigned int pwm_offset = y * pwm_stride;
 
-        ASSERT(width % 32 == 0);                        // Ensure length is a multiple of 32
-        ASSERT(pwm_offset % BIT_DEPTH_ALIGNMENT == 0);  // Ensure pwm offset is aligned
         for (uint16_t x=0; x < width; x++) {
 
-            // this is just scene->pwm_signalA + pwm_offset, but we are telling the compiler it's aligned at BIT_DEPTH_ALIGNMENT
-            uint32_t *pwm_signal = __builtin_assume_aligned(scene->pwm_signalA + pwm_offset, BIT_DEPTH_ALIGNMENT);
-            update_bcm_signal(scene, bits, pwm_signal, image, offset);
+            // this is just scene->bcm_signalA + bcm_offset, but we are telling the compiler it's aligned at BIT_DEPTH_ALIGNMENT
+            update_bcm_signal(scene, bits, bcm_signal, image_ptr);
 
-            pwm_offset += scene->bit_depth;
-            offset += scene->stride;
+            bcm_signal += scene->bit_depth;
+            image_ptr += scene->stride;
         }
     }
+
+    // flip the double buffer. render_forever will detect this on next vsync and switch the buffers
+    scene->bcm_ptr = !scene->bcm_ptr;
     
 	// Calculate the sleep delay required to achieve the desired fps
 	if (do_fps_sync && prev_time.tv_sec == 0) {
@@ -755,181 +731,6 @@ void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, con
 
 	clock_gettime(CLOCK_MONOTONIC, &prev_time);
 }
-
-
-
-
-/**
- * @brief this function takes the image data and maps it to the pwm signal. scene->stride is the number of bytes per pixel.
- * for 24bpp RGB images, this should be set to 3, for 32bpp RGBA images this should be set to 4.
- * 
- */
-/*
-__attribute__((hot))
-void map_byte_image_to_pwm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync) {
-
-    const static uint32_t PORT[24] = {
-        (1 << ADDRESS_P0_R1), (1 << ADDRESS_P0_R2), (1 << ADDRESS_P0_G1), (1 << ADDRESS_P0_G2), (1 << ADDRESS_P0_B1), (1 << ADDRESS_P0_B2),
-        (1 << ADDRESS_P0_R1), (1 << ADDRESS_P0_R2), (1 << ADDRESS_P0_G1), (1 << ADDRESS_P0_G2), (1 << ADDRESS_P0_B1), (1 << ADDRESS_P0_B2),
-        (1 << ADDRESS_P1_R1), (1 << ADDRESS_P1_R2), (1 << ADDRESS_P1_G1), (1 << ADDRESS_P1_G2), (1 << ADDRESS_P1_B1), (1 << ADDRESS_P1_B2),
-        (1 << ADDRESS_P2_R1), (1 << ADDRESS_P2_R2), (1 << ADDRESS_P2_G1), (1 << ADDRESS_P2_G2), (1 << ADDRESS_P2_B1), (1 << ADDRESS_P2_B2)
-    };
-
-
-	// get the current time and estimate fps delay
-    uint32_t frame_time_us = 1000000 / scene->fps;
-    static struct timespec prev_time, cur_time;
-
-    // tone map the bits for the current scene, update if the lookup table if scene tone mapping changes....
-    static uint64_t *bits = NULL;
-    static func_tone_mapper_t tone_map = NULL;
-    if (bits == NULL || tone_map != scene->tone_mapper) {
-        if (bits != NULL) { // don't leak memory!
-            free(bits);
-        }   
-        bits = tone_map_rgb_bits(scene, scene->bit_depth);
-        tone_map = scene->tone_mapper;
-    }
-
-    // map the image to handle weird panel chain configurations
-    if (scene->image_mapper != NULL) {
-        debug("calling image mapper %p\n", scene->image_mapper);
-        scene->image_mapper(image, NULL, scene);
-    }
-
-
-    // we need some variables to allow us to iterate over the image in various ways
-    // mirroring is just iterating over the image in reverse order
-    // port mirroring can be done by switching the port order on the board
-    int16_t bitmask_start = 0, img_y = 0;
-    int32_t bitmask_stride = scene->bit_depth;
-    if (scene->image_mirror)  {
-        bitmask_stride = -scene->bit_depth;
-        bitmask_start = scene->width - 1;
-    }
-    for (uint8_t port_num = 0; port_num < scene->num_ports;  port_num++) {
-        const uint32_t port_off = (port_num * 6);
-        uint32_t pwm_clear_mask = ~(PORT[port_off+0] | PORT[port_off+1] | PORT[port_off+2] | PORT[port_off+3] | PORT[port_off+4] | PORT[port_off+5]);
-
-        for (int panel_y=0; panel_y < (scene->panel_height/2); panel_y++) {
-
-            int pwm_offset = (panel_y * scene->width + bitmask_start) * scene->bit_depth;
-            int offset1 = (img_y * scene->width) * scene->stride;
-            int offset2 = ((img_y + 32) * scene->width) * scene->stride;
-            for (int x=0; x < scene->width; x++) {
-
-                const RGB *__restrict__ pixel_upper = (RGB *)(image + offset1);
-                const RGB *__restrict__ pixel_lower = (RGB *)(image + offset2);
-
-                update_pwm_signal_classic(scene->pwm_signalA + pwm_offset, scene->bit_depth, pixel_upper, pixel_lower, port_off, bits, pwm_clear_mask);
-                pwm_offset += bitmask_stride;
-                offset1 += scene->stride;
-                offset2 += scene->stride;
-            }
-            img_y++;
-        }
-        // need to skip over the lower half of the panel we already mapped in...
-        img_y+=scene->panel_height/2;
-    }
-    
-	// Calculate the sleep delay
-	if (do_fps_sync && prev_time.tv_sec == 0) {
-		clock_gettime(CLOCK_MONOTONIC, &cur_time);
-		long frame_time = (cur_time.tv_sec - prev_time.tv_sec) * 1000000L + (cur_time.tv_nsec - prev_time.tv_nsec) / 1000L;
-
-		// Sleep for the remainder of the frame time to achieve 120 FPS
-		if (frame_time < frame_time_us) {
-			usleep(frame_time_us - frame_time);
-		}
-	}
-
-	clock_gettime(CLOCK_MONOTONIC, &prev_time);
-}
-*/
-
-
-
-
-/**
- * @brief  do not use this method. it needs to be updated.  look for a corrected version in the future
- * 
- */
-/*
-__attribute__((hot,deprecated))
-void map_byte_image_to_pwm_dither(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync) {
-
-
-    const static uint32_t PORT[18] = {
-        (1 << ADDRESS_P0_R1), (1 << ADDRESS_P0_R2), (1 << ADDRESS_P0_G1), (1 << ADDRESS_P0_G2), (1 << ADDRESS_P0_B1), (1 << ADDRESS_P0_B2),
-        (1 << ADDRESS_P1_R1), (1 << ADDRESS_P1_R2), (1 << ADDRESS_P1_G1), (1 << ADDRESS_P1_G2), (1 << ADDRESS_P1_B1), (1 << ADDRESS_P1_B2),
-        (1 << ADDRESS_P2_R1), (1 << ADDRESS_P2_R2), (1 << ADDRESS_P2_G1), (1 << ADDRESS_P2_G2), (1 << ADDRESS_P2_B1), (1 << ADDRESS_P2_B2)
-    };
-
-
-	// get the current time and estimate fps delay
-    int16_t inc_y = 1, img_y = 0;
-    uint32_t frame_time_us = 1000000 / scene->fps;
-    static struct timespec prev_time, cur_time;
-
-    // tone map the bits for the current scene, update if the tone mapping changes....
-    static uint64_t *bits = NULL;
-    static func_tone_mapper_t tone_map = NULL;
-    if (bits == NULL || tone_map != scene->tone_mapper) {
-        if (bits != NULL) { // don't leak memory!
-            free(bits);
-        }   
-        printf("map pwm bits\n");
-        bits = tone_map_rgb_bits(scene, scene->bit_depth);
-        tone_map = scene->tone_mapper;
-    }
-
-    if (scene->invert) {
-        img_y = scene->height - 1;
-        inc_y = -1;
-    }
-
-
-
-    for (uint8_t port_num = 0; port_num < scene->num_ports;  port_num++) {
-        const uint32_t port_off = (port_num * 6);
-        const uint32_t pwm_clear_mask = ~(PORT[port_off+0] | PORT[port_off+1] | PORT[port_off+2] | PORT[port_off+3] | PORT[port_off+4] | PORT[port_off+5]);
-
-        for (int panel_y=0; panel_y < (scene->panel_height/2); panel_y++) {
-
-            int pwm_offset = (panel_y * scene->width) * scene->bit_depth;
-            int offset1 = (img_y * scene->width) * scene->stride;
-            int offset2 = ((img_y + 32) * scene->width) * scene->stride;
-            for (int x=0; x < scene->width; x++) {
-
-                const RGB *__restrict__ pixel_upper = (RGB *)(image + offset1);
-                const RGB *__restrict__ pixel_lower = (RGB *)(image + offset2);
-
-                update_pwm_signal_classic(scene->pwm_signalA + pwm_offset, scene->bit_depth, pixel_upper, pixel_lower, port_off, bits, pwm_clear_mask);
-
-                pwm_offset += scene->bit_depth;
-                offset1 += scene->stride;
-                offset2 += scene->stride;
-            }
-            img_y += inc_y;
-        }
-        // need to skip over the lower half of the panel we already mapped in...
-        img_y+=inc_y * (scene->panel_height/2);
-    }
-    
-	// Calculate the sleep delay
-	if (__builtin_expect((do_fps_sync && prev_time.tv_sec == 0), 1)) {
-		clock_gettime(CLOCK_MONOTONIC, &cur_time);
-		long frame_time = (cur_time.tv_sec - prev_time.tv_sec) * 1000000L + (cur_time.tv_nsec - prev_time.tv_nsec) / 1000L;
-
-		// Sleep for the remainder of the frame time to achieve 120 FPS
-		if (frame_time < frame_time_us) {
-			usleep(frame_time_us - frame_time);
-		}
-	}
-
-	clock_gettime(CLOCK_MONOTONIC, &prev_time);
-}
-*/
 
 
 
@@ -986,42 +787,6 @@ uint8_t *u_mapper_impl(const uint8_t *image_in, uint8_t *image_out, const struct
 // XXX readd to linux
 //func_image_mapper_t u_mapper = u_mapper_impl;
 
-
-
-/**
- * @brief draw a random square on image
- * 
- * @param image buffer to draw to
- * @param img_width buffer width in pixels
- * @param img_height buffer height in pixels
- * @param stride number of BYTES per pixel (usually 3 or 4)
- */
-void draw_square(uint8_t *image, const uint16_t img_width, const uint16_t img_height, const uint8_t stride) {
-
-    int width  = rand() % 16 + 4;;
-    int height = rand() % 16 + 4;;
-
-    int x_start = rand() % (img_width - width);
-    int y_start = rand() % (img_height - height);
-
-
-    uint8_t red = rand() % 256;
-    uint8_t green = rand() % 256;
-    uint8_t blue = rand() % 256;
-
-    //RGB color = {red, green, blue};
-    //hable_inplace(&color);
-
-    // Draw the rectangle
-    for (int y = y_start; y < y_start + height; y++) {
-        for (int x = x_start; x < x_start + width; x++) {
-            int o = (y * img_width + x) * stride;
-            image[o+0] = red;//color.r;  // Set red channel
-            image[o+1] = green;//color.g;  // Set green channel
-            image[o+2] = blue;//color.b;  // Set blue channel
-        }
-    }
-}
 
 
 /**
@@ -1133,7 +898,7 @@ float gradient_vert(uint16_t p1, uint16_t p2, uint16_t p3, uint16_t p4) {
  * @param y vertical position (starting at 0)
  * @param pixel RGB value to set at pixel x,y
  */
-inline void hub_pixel(scene_info *scene, int x, int y, RGB pixel) {
+inline void hub_pixel(scene_info *scene, const int x, const int y, const RGB pixel) {
     int offset = (y * scene->width + x) * scene->stride;
     ASSERT(offset < scene->width * scene->height * scene->stride);
 
@@ -1151,14 +916,16 @@ inline void hub_pixel(scene_info *scene, int x, int y, RGB pixel) {
  * @param y vertical position (starting at 0)
  * @param pixel RGB value to set at pixel x,y
  */
-inline void hub_pixel_alpha(scene_info *scene, int x, int y, RGBA pixel) {
+inline void hub_pixel_alpha(scene_info *scene, const int x, const int y, const RGBA pixel) {
     ASSERT(scene->stride == 4);
     int offset = (y * scene->width + x) * scene->stride;
     ASSERT(offset < scene->width * scene->height * scene->stride);
 
-    scene->image[offset] = pixel.r;
-    scene->image[offset + 1] = pixel.g;
-    scene->image[offset + 2] = pixel.b;
+    Normal alpha = normalize8(pixel.a);
+
+    scene->image[offset] += (pixel.r * alpha);
+    scene->image[offset + 1] += (pixel.g * alpha);
+    scene->image[offset + 2] += (pixel.b * alpha);
     scene->image[offset + 3] = pixel.a;
 }
 
@@ -1173,19 +940,24 @@ inline void hub_pixel_alpha(scene_info *scene, int x, int y, RGBA pixel) {
  * @param y2 
  * @param color 
  */
-void hub_fill(scene_info *scene, uint16_t x, uint16_t y, uint16_t x2, uint16_t y2, RGB color) {
-    if (x2 > x) {
-        uint16_t temp = x;
-        x = x2;
-        x2 = temp;
+void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uint16_t x2, const uint16_t y2, const RGB color) {
+    uint16_t fx1 = x1 % scene->width;
+    uint16_t fx2 = x2 % scene->width;
+    uint16_t fy1 = y1 % scene->height;
+    uint16_t fy2 = y2 % scene->height;
+
+    if (fx2 < fx1) {
+        uint16_t temp = fx1;
+        fx1 = fx2;
+        fx2 = temp;
     }
-    if (y2 > y) {
-        uint16_t temp = y;
-        y = y2;
-        y2 = temp;
+    if (fy2 < fy1) {
+        uint16_t temp = fy1;
+        fy1 = fy2;
+        fy2 = temp;
     }
-    for (int y = 0; y < y2; y++) {
-        for (int x = 0; x < x2; x++) {
+    for (int y = fy1; y < fy2; y++) {
+        for (int x = fx1; x < fx2; x++) {
             hub_pixel(scene, x, y, color);
         }
     }

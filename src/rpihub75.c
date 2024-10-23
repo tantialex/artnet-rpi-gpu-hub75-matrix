@@ -50,13 +50,14 @@
 /**
  * @brief calculate an address line pin mask for row y
  * 
+ * @TODO: make this a lookup table
  * @param y the panel row number to calculate the mask for
  * @return uint32_t the bitmask for the address lines at row y
  */
-uint32_t row_to_address(const int y) {
+uint32_t row_to_address(const int y, uint8_t half_height) {
 
     // if they pass in image y not panel y, convert to panel y
-    uint16_t row = (y -1) % PANEL_HEIGHT;
+    uint16_t row = (y-1) % half_height;
     uint32_t bitmask = 0;
 
     // Map each bit from the input to the corresponding bit position in the bitmask
@@ -106,8 +107,11 @@ void check_scene(const scene_info *scene) {
     if (scene->stride != 3 && scene->stride != 4) { 
         die("Only 3 or 4 byte stride supported\n");
     }
-    if (scene->pwm_signalA == NULL) {
-        die("No pwm signal buffer defined\n");
+    if (scene->bcm_signalA == NULL) {
+        die("No bcm signal buffer A defined\n");
+    }
+    if (scene->bcm_signalB == NULL) {
+        die("No bcm signal buffer B defined\n");
     }
     if (scene->image == NULL) {
         die("No RGB image buffer defined\n");
@@ -134,7 +138,6 @@ void check_scene(const scene_info *scene) {
  * 
  * 
  */
-__attribute__((noreturn))
 void render_forever(const scene_info *scene) {
 
     srand(time(NULL));
@@ -142,55 +145,64 @@ void render_forever(const scene_info *scene) {
     uint32_t *PERIBase = map_gpio(0); // for root on pi5 (/dev/mem, offset is 0xD0000)
     // offset to the RIO registers (required for #define register access. 
     // TODO: this needs to be improved and #define to RIOBase removed)
-    uint32_t *RIOBase  = PERIBase + RIO_OFFSET;
+    const uint32_t *RIOBase  = PERIBase + RIO_OFFSET;
 
     // configure the pins we need for pulldown, 8ma and output
     configure_gpio(PERIBase);
-
-    // create the OE jitter mask to control screen brightness
-    uint32_t *jitter_mask = create_jitter_mask(JITTER_SIZE, scene->brightness);
-    if (scene->jitter_brightness == false) {
-        for (int i=0; i<JITTER_SIZE; i++) {
-            jitter_mask[i] = 0x0;
-        }
-    }
- 
-    // render pwm image data to the GPIO pins forever...
-    uint16_t toggle_pwm = 0;
+     
+    // index into the OE jitter mask
+    uint16_t jitter_idx = 0;
+    // pre compute some variables. let the compiler know the alignment for optimizations
     const uint8_t  half_height __attribute__((aligned(16))) = scene->panel_height / 2;
     const uint16_t width __attribute__((aligned(16))) = scene->width;
     const uint8_t  bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+
+    // pointer to the current bcm data to be displayed
+    uint32_t *bcm_signal = scene->bcm_signalA;
     ASSERT(width % 16 == 0);
     ASSERT(half_height % 16 == 0);
     ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+
+    bool last_pointer = scene->bcm_ptr;
+
+    // create the OE jitter mask to control screen brightness
+    // if we are using BCM brightness, then set OE to 0 (0 is display on ironically)
+    uint32_t *jitter_mask = create_jitter_mask(JITTER_SIZE, scene->brightness);
+    if (scene->jitter_brightness == false) {
+        memset(jitter_mask, 0, JITTER_SIZE);
+    }
+
+    uint32_t addr_map[half_height];
+    for (int i=0; i<half_height; i++) {
+        addr_map[i] = row_to_address(i, half_height);
+    }
+
+
+
     while(scene->do_render) {
-        const uint32_t *__attribute__((aligned(16))) pwm_signal = scene->pwm_signalA;
-        const uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
 
         // iterate over the bit plane
+        PRE_TIME;
         for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
             // for the current bit plane, render the entire frame
+            uint32_t offset = pwm;
             for (uint16_t y=0; y<half_height; y++) {
                 asm volatile ("" : : : "memory");  // Prevents optimization
 
-                // compute the line address for this row
-                const uint32_t address_mask = row_to_address(y);
-                uint32_t offset = ((y * scene->width + (0)) * bit_depth) + pwm;
+                // compute the bcm row start address for y
+                // uint32_t offset = ((y * scene->width ) * bit_depth) + pwm;
                 for (uint16_t x=0; x<width; x++) {
                     asm volatile ("" : : : "memory");  // Prevents optimization
-                    // set all bits for clock cycle at once
-                    //rio->Out = pwm_signal[offset] | address_mask | PIN_CLK | jitter_mask[toggle_pwm];
-                    // toggle clock pin low
-                    //rioCLR->Out = PIN_CLK;
-
-                    // set all bits for clock cycle at once, toggle clock low
-                    rio->Out = pwm_signal[offset] | address_mask | jitter_mask[toggle_pwm];
-                    // advance the global OE jitter mask 1 frame
-                    toggle_pwm = (toggle_pwm + 1) % JITTER_SIZE;
+                    // set all bits in 1 op. RGB data, current row address and the OE jitter mask (brightness control)
+                    rio->Out = bcm_signal[offset] | addr_map[y] | jitter_mask[jitter_idx];
+                    
                     // toggle clock pin high
                     rioSET->Out = PIN_CLK;
 
-                    // advance to the next bit in the pwm signal
+                    // advance the global OE jitter mask 1 frame
+                    jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
+
+                    // advance to the next bit in the bcm signal
                     offset += bit_depth;
                 }
                 // make sure enable pin is high (display off) while we are latching data
@@ -199,6 +211,15 @@ void render_forever(const scene_info *scene) {
                 rioSET->Out = PIN_LATCH;
                 rioCLR->Out = PIN_LATCH;
             }
+
+            // check every 8 updates for new frame data, swap the BCM source if a new frame was loaded 
+            //if (pwm % 8 == 1) {
+                if (UNLIKELY(scene->bcm_ptr != last_pointer)) {
+                    last_pointer = scene->bcm_ptr;
+                    bcm_signal = (last_pointer) ? scene->bcm_signalB : scene->bcm_signalA;
+                }
+            //}
         }
+        POST_TIME;
     }
 }

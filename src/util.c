@@ -15,6 +15,7 @@
 
 #include "util.h"
 #include "rpihub75.h"
+#include "pixels.h"
 
 
 extern char *optarg;
@@ -285,6 +286,12 @@ char getch() {
     }
 }
 
+/**
+ * @brief display command line scene configuration options and exit
+ * 
+ * @param argc 
+ * @param argv 
+ */
 void usage(int argc, char **argv) {
     die(
         "Usage 2: %s\n"
@@ -311,6 +318,15 @@ void usage(int argc, char **argv) {
 }
 
 
+/**
+ * @brief create a default scene setup using the #DEFINE values
+ * parse command line options to override. This is a great way
+ * to test your setup easily from command line
+ * 
+ * @param argc 
+ * @param argv 
+ * @return scene_info* 
+ */
 scene_info *default_scene(int argc, char **argv) {
     // setup all scene configuration info
     scene_info *scene = (scene_info*)malloc(sizeof(scene_info));
@@ -322,7 +338,7 @@ scene_info *default_scene(int argc, char **argv) {
     scene->num_chains = 4;
     scene->num_ports = 1;
     scene->buffer_ptr = 0;
-    scene->stride = 4;
+    scene->stride = 3;
     scene->gamma = GAMMA;
     scene->red_gamma = RED_GAMMA_SCALE;
     scene->green_gamma = GREEN_GAMMA_SCALE;
@@ -333,13 +349,14 @@ scene_info *default_scene(int argc, char **argv) {
     scene->jitter_brightness = true;
 
     scene->bit_depth = 32;
-    scene->pwm_mapper = map_byte_image_to_bcm
+    scene->pwm_mapper = map_byte_image_to_bcm;
     scene->tone_mapper = copy_tone_mapperF;
     scene->brightness = 200;
     scene->motion_blur_frames = 0;
+    scene->do_render = TRUE;
 
-    // calculate max fps for this configuration
-    scene->fps = 9600 / scene->bit_depth / (scene->panel_width / 16);
+    // default to 120 fps
+    scene->fps = 120;
 
     // print usage if no arguments
     if (argc < 2) { 
@@ -429,9 +446,11 @@ scene_info *default_scene(int argc, char **argv) {
         }
     }
 
+    // create 
     size_t buffer_size = (scene->width + 1) * (scene->height + 1) * 3 * scene->bit_depth;
     // force the buffers to be 16 byte aligned to improve auto vectorization
-    scene->pwm_signalA = aligned_alloc(16, buffer_size * 4);
+    scene->bcm_signalA = aligned_alloc(16, buffer_size * 4);
+    scene->bcm_signalB = aligned_alloc(16, buffer_size * 4);
     scene->image = aligned_alloc(16, scene->width * scene->height * 4); // make sure we always have enough for RGBA
 
     return scene;
@@ -496,7 +515,7 @@ void *calibrate_panels(void *arg) {
             }
         }
 
-        map_byte_image_to_bcm(image, scene, TRUE);
+        map_byte_image_to_bcm(scene, image, TRUE);
         char ch = getch();
         if (ch == 'a') {
             scene->gamma -= 0.01f;
@@ -563,7 +582,7 @@ void *calibrate_panels(void *arg) {
 
 // Function to receive UDP packets and reassemble the frame
 void* receive_udp_data(void *arg) {
-    const scene_info *scene = (scene_info *)arg; // dereference the scene info
+    scene_info *scene = (scene_info *)arg; // dereference the scene info
     int sock;
     struct sockaddr_in server_addr;
     struct udp_packet packet;
@@ -613,7 +632,7 @@ void* receive_udp_data(void *arg) {
         memcpy(image_data + ((frame_num * max_frame_sz) + frame_off), packet.data, PACKET_SIZE - 10);
         if (packet_id == total_packets) {
             // map to pwm data
-            scene->pwm_mapper(image_data + (frame_num * max_frame_sz), scene, TRUE);
+            scene->pwm_mapper(scene, image_data + (frame_num * max_frame_sz), TRUE);
         }
 
     }

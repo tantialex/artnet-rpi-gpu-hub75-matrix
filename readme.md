@@ -171,7 +171,7 @@ brightness levels even when using 64 bits of pwm data. this is controlled via th
 
 The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128-bit SIMD vectors for the innermost
 loop. I have attempted to remove the (!!( operator to no avail. If you can improve the bit operations in this loop, this
-is 90% of the program time. mask_lookup is 1ULL << j. pwm_signal[offset] is the current pixel start of the pwm bit plane.
+is 90% of the program time. mask_lookup is 1ULL << j. bcm_signal[offset] is the current pixel start of the pwm bit plane.
 pwm_clear_mask is an inverse bit mask for the RGB pins of the current port. port[0] - port[6] are the rgb pins 1-6.
 r1_pwm is the linear 8-bit rgb value to 64-bit pwm dat a lookup table for red, green, blue. etc.
 
@@ -184,7 +184,7 @@ for (int j=0; j<bit_depth; j++) {
         // clear just the bits on this port for this bit plane so we don't accidentally clear other rgb ports
         // Set the bits if the pwm value is set for this bit plane using bitmask instead of ternary
         // the clear_mask sets all bits for other ports to 1 so that we don't interfere with the other ports
-        pwm_signal[offset] = (pwm_signal[offset] & pwm_clear_mask) |
+        bcm_signal[offset] = (bcm_signal[offset] & pwm_clear_mask) |
             (port[0] & (uint64_t)-(!!(r1_pwm & mask))) |
             (port[1] & (uint64_t)-(!!(r2_pwm & mask))) |
             (port[2] & (uint64_t)-(!!(g1_pwm & mask))) |
@@ -383,3 +383,9 @@ Compiler Flags
 
 investigation:
 blue noise dithering
+
+sudo apt update upgrade
+sudo apt update
+sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
+sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
+

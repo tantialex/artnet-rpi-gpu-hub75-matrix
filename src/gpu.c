@@ -138,9 +138,8 @@ static GLuint create_shadertoy_program(char *file) {
  * 
  * @param arg pointer to the current scene_info object
  */
-__attribute__((noreturn))
 void *render_shader(void *arg) {
-    const scene_info *scene = (scene_info*)arg;
+    scene_info *scene = (scene_info*)arg;
     debug("render shader %s\n", scene->shader_file);
 
     // Open a file descriptor to the DRM device
@@ -275,12 +274,12 @@ void *render_shader(void *arg) {
 
                 pixelsO[i] = (uint8_t)(accum);
             }
-            scene->pwm_mapper(pixelsO, scene, FALSE);
+            scene->pwm_mapper(scene, pixelsO, FALSE);
             frame_num = frame % scene->motion_blur_frames;
         }
         // skip motion blur ....
         else {
-            scene->pwm_mapper(pixels, scene, FALSE);
+            scene->pwm_mapper(scene, pixels, FALSE);
         }
 
 
@@ -310,5 +309,6 @@ void *render_shader(void *arg) {
 
     free(pixelsA);
     close(fd);
+    return NULL;
 }
 

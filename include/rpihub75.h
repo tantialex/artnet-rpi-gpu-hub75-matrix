@@ -7,6 +7,7 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <stdatomic.h>
 
 
 #ifndef _GPIO_H
@@ -18,45 +19,45 @@
 //////////////////////////////////////////////////////////
 
 #ifndef RED_SCALE
-#define RED_SCALE 0.99f
+    #define RED_SCALE 0.99f
 #endif
 
 #ifndef GREEN_SCALE
-#define GREEN_SCALE 1.04f
+    #define GREEN_SCALE 1.04f
 #endif
 
 #ifndef BLUE_SCALE
-#define BLUE_SCALE 1.0f
+    #define BLUE_SCALE 1.0f
 #endif
 
 #ifndef RED_GAMMA_SCALE
-#define RED_GAMMA_SCALE 1.0f
+    #define RED_GAMMA_SCALE 1.0f
 #endif
 
 #ifndef GREEN_GAMMA_SCALE
-#define GREEN_GAMMA_SCALE 1.0f
+    #define GREEN_GAMMA_SCALE 1.0f
 #endif
 
 #ifndef BLUE_GAMMA_SCALE
-#define BLUE_GAMMA_SCALE 0.92f
+    #define BLUE_GAMMA_SCALE 0.92f
 #endif
 
 #ifndef GAMMA
-#define GAMMA 1.99f
+    #define GAMMA 1.99f
 #endif
 
 
 #ifndef PANEL_WIDTH
-#define PANEL_WIDTH 64
+    #define PANEL_WIDTH 64
 #endif
 #ifndef PANEL_HEIGHT
-#define PANEL_HEIGHT PANEL_WIDTH 
+    #define PANEL_HEIGHT PANEL_WIDTH 
 #endif
 #ifndef IMG_WIDTH
-#define IMG_WIDTH 64
+    #define IMG_WIDTH 64
 #endif
 #ifndef IMG_HEIGHT
-#define IMG_HEIGHT 64
+    #define IMG_HEIGHT 64
 #endif
 
 // ideally you should use aligned bit_depth
@@ -65,7 +66,7 @@
 //  for bit depths of 4,8,12,16,20,24,28..., use BIT_DEPTH_ALIGNMENT 4
 //  for bit depths of 2,4,6,8,10,.... use BIT_DEPTH_ALIGNMENT 2
 //  for all others use BIT_DEPTH_ALIGNMENT 1
-#define BIT_DEPTH_ALIGNMENT 16
+#define BIT_DEPTH_ALIGNMENT 1
 
 #define SERVER_PORT 22222
 
@@ -76,8 +77,12 @@
 
 //////////////////////////////////////////////////////////
 
-#define CONSOLE_DEBUG 0
-#define ENABLE_ASSERTS 0
+#ifndef CONSOLE_DEBUG
+    #define CONSOLE_DEBUG 1
+#endif
+#ifndef ENABLE_ASSERTS
+    #define ENABLE_ASSERTS 1 
+#endif
 #define PACKET_SIZE 1450
 #define PREAMBLE 0xdeadcafe
 
@@ -104,8 +109,8 @@
     #define PAD_OFFSET  0x2F0000 / 4
 #else
     #define PERI_BASE 0x1f000D0000
-    //#define PERI_BASE 0x1f00000000
-    #define GPIO_OFFSET 0x00000 / 4
+    //#define PERI_BASE 0x1f00000000 // for root access to /dev/mem , skip the 0xD0000 offset
+    #define GPIO_OFFSET 0x00000 / 4  // 0xD0000 is alreay added to the PERI_BASE
     #define RIO_OFFSET  0x10000 / 4
     #define PAD_OFFSET  0x20000 / 4
 #endif
@@ -250,7 +255,7 @@ struct udp_packet {
 struct scene_info;
 
 // void map_byte_image_to_pwm(uint8_t *image, const scene_info *scene, uint8_t fps_sync) {
-typedef void (*func_pwm_mapper_t)(uint8_t *image, const struct scene_info *scene, const uint8_t fps_sync);
+typedef void (*func_pwm_mapper_t)(struct scene_info *scene, const uint8_t *image, const uint8_t fps_sync);
 typedef void (*func_tone_mapper_t)(const RGBF *in, RGBF *out);
 typedef uint8_t *(*func_image_mapper_t)(const uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
 typedef uint8_t *(image_mapper_t)(const uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
@@ -276,7 +281,7 @@ typedef struct scene_info {
     /** @brief number of ports connected to the PI (1-3) */
     uint8_t num_ports;
 
-    /** @brief number of bits per color channel (8-32) */
+    /** @brief number of bits per color channel (8-64) */
     uint8_t bit_depth;
 
     /** @brief brightness level (0-255) */
@@ -291,15 +296,19 @@ typedef struct scene_info {
     /**
      * @brief points to active buffer
      * in update code use this to select the pwm buffer to render to: 
-     * (scene->buffer_ptr == 1)? scene->pwm_signalA : scene->pwm_signalB; 
+     * (scene->buffer_ptr == 1)? scene->bcm_signalA : scene->bcm_signalB; 
      */
     uint8_t buffer_ptr;
 
     /** * @brief see buffer_ptr for usage */
-    uint32_t *restrict pwm_signalA __attribute__((aligned(16)));
+    uint32_t *restrict bcm_signalA __attribute__((aligned(16)));
+    uint32_t *restrict bcm_signalB __attribute__((aligned(16)));
+
+    atomic_bool bcm_ptr;
 
     /** * @brief see buffer_ptr for usage */
-    uint8_t *image __attribute__((aligned(16)));
+    //uint8_t *image __attribute__((aligned(16)));
+    uint8_t *image;
 
     /** @brief a shader file to render on the GPU */
     char *shader_file;
@@ -405,7 +414,6 @@ uint8_t* u_mapper(const uint8_t *image, uint8_t *output_image, const scene_info 
 float mixf(const float x, const float y, const Normal a);
 
 
-void draw_square(uint8_t *image, const uint16_t img_width, const uint16_t img_height, const uint8_t stride);
 void calculate_fps(long sleep_time);
 void *render_shader(void *arg);
 void dither_image(uint8_t *image, int width, int height);
@@ -417,7 +425,6 @@ void check_scene(const scene_info *scene);
  * 
  * @param scene 
  */
-__attribute__((noreturn))
 void render_forever(const scene_info *scene);
 
 #endif

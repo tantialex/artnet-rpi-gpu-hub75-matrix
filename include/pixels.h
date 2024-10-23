@@ -29,8 +29,9 @@ typedef void (*update_bcm_signal_fn)(
     const scene_info *scene,
     const void *bits,  // Use void* to handle both uint32_t* and uint64_t*
     uint32_t *bcm_signal,
-    const uint8_t *image,
-    const uint32_t offset);
+    uint8_t *image);
+    // XXX FIX
+    //const uint8_t *image);
 
 /**
  * @brief update_bcm_signal_fn implementation for up to 64 bit BCM data
@@ -45,8 +46,10 @@ void update_bcm_signal_64(
     const scene_info *scene,
     const void *__restrict__ void_bits,
     uint32_t *__restrict__ bcm_signal,
-    const uint8_t *__restrict__ image,
-    const uint32_t offset);
+    uint8_t *images);
+    // XXX fix
+    //const uint8_t *__restrict__ image,
+    //const uint32_t offset);
 
 
 /**
@@ -62,13 +65,20 @@ void update_bcm_signal_32(
     const scene_info *scene,
     const void *__restrict__ void_bits,
     uint32_t *__restrict__ bcm_signal,
-    const uint8_t *__restrict__ image,
-    const uint32_t offset);
+    const uint8_t *__restrict__ image);
 
 
-//void map_byte_image_to_pwm_fast(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
 
-void map_byte_image_to_bcm(uint8_t *restrict image, const scene_info *scene, const uint8_t do_fps_sync);
+/**
+ * @brief this function takes the image data and maps it to the bcm signal.
+ * 
+ * if scene->tone_mapper is updated, new bcm bit masks will be created.
+ * 
+ * @param scene the scene information
+ * @param image the image to map to the scene bcm data. if NULL scene->image will be used
+ * @param do_fps_sync if true, the function will attempt to usleep delay sync to the scene->fps
+ */
+void map_byte_image_to_bcm(scene_info *scene, const uint8_t *image, const uint8_t do_fps_sync);
 
 /**
  * @brief convert linear RGB to normalized CIE1931 XYZ color space
@@ -278,6 +288,8 @@ void hub_triangle(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int
  */
 void hub_triangle_aa(scene_info *scene, int x0, int y0, int x1, int y1, int x2, int y2, RGB color);
 
+void hub_pixel(scene_info *scene, const int x, const int y, const RGB pixel);
+void hub_pixel_alpha(scene_info *scene, const int x, const int y, const RGBA pixel);
 void hub_fill(scene_info *scene, uint16_t x, uint16_t y, uint16_t x2, uint16_t y2, RGB color);
 
 #endif
