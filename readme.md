@@ -5,19 +5,25 @@ This is loosely based on the work done by hzeller adding HUB75 support to RPI (w
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
 for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
 
+![Shader Demo 1]([https://www.example.com/image.jpg](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_1.jpg)
+
+![Shader Demo 2](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_2.jpg)[Download Video](path/to/video.mp4)
+
+![Demo Video - Happy Jump](https://raw.github.com/bitslip6/rpi-gpu-hub75-matrix/raw/refs/heads/main/assets/happy_jump.mp4)
+
 Glossary
 --------
-*PWM* modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
+###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
 
-*BCM* modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
+###BCM modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
 
-*Gamma* mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
+###Gamma mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
 are spread out so that the color values ramp exponentially. This more closely matches human eye perception but does
 remove dynamic range at the low end of the spectrum producing image quantization in darker regions.
 
-*Dithering* When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
+###Dithering When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
 
-*Tone Mapping* Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
+###Tone Mapping Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
 mapping function. These functions are designed to compress the upper and lower regions of an image to preserve High Dynamic
 Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
 your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
@@ -26,12 +32,12 @@ your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_to
 
 Overview
 --------
-BitBang HUB75 data at steady 20Mhz. Supports 9600Hz refresh rate on single 64x64 panel. Supports up to 3 ports with 2 pixels 
-per port per clock cycle. Double buffering of frame data is handled by the library. Support for 24bpp RGB and 32bpp RGBA
+BitBang HUB75 data at steady 20Mhz. Supports 9600Hz refresh rate on a single 64x64 panel. Supports up to 3 ports with 2 pixels 
+per port per clock cycle. The library handles the double buffering of frame data. Support for 24bpp RGB and 32bpp RGBA
 source image data. Frame rates of >120Hz with 64 bits of BCM data are easily possible with chain lengths of 3 or more. 
-Support for up to 64bits of binary code modulation data (1/64 pwm cycle for 64 different color levels for each RGB value).
+Support for up to 64 bits of binary code modulation data (1/64 pwm cycle for 64 different color levels for each RGB value).
 
-GPU support using Linux's Generic Buffer Manager (gbm), GLESv2 and EGL is also included. This means you can use 
+GPU support using Linux's Generic Buffer Manager (gbm), GLESv2, and EGL is also included. This means you can use 
 OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included in the shaders
 directory.
 
@@ -41,27 +47,27 @@ and balanced image on the LED panel. You can implement your own tone mapping by 
 function and setting it in the active "scene_info". Tone mapping changes take effect on the next frame update and 
 do not add any delay after initial BCM mapping. 
 
-Gamma correction is also provided. Global gamma can be controlled on the command line. Each red, green and blue color
+Gamma correction is also provided. Global gamma can be controlled on the command line. Each red, green, and blue color
 channel also has its own gamma correction to help improve color balance. In practice gamma of about 2.2 produces
-generally good results. red, green and blue gamma are multiplied against base gamma for each color channel so for 
-color balanced panels, these should all be set to 1 as #define in the header files.
+generally good results. red, green, and blue gamma are multiplied against base gamma for each color channel so for 
+color-balanced panels, these should all be set to 1 as #define in the header files.
 
 Linear color correction is also provided. You can linearly add + or - red, green and blue to the color channels 
 by adjusting these values in the scene controls. This will effect the generated BCM data that is mapped on every frame.
 
 No hardware clocks are required for operation so you can run the code with only group gpio
-privileges. Operation is mostly flicker free, however, you should see the improved response by running with nice -n -20
+privileges. Operation is mostly flicker-free, however, you should see the improved response by running with nice -n -20
 and running the real-time PREEMPT_RT patch on the kernel (6.6) as of this writing. PREEMPT_RT is mainline in 6.12
 so hopefully no patches are required on the next raspbian release!
 
 This implementation only supports rpi5 at the moment. It should be simple to add support for other PIs as only
 the memory-mapped peripheral address for the GPIO pins is required. Preliminary GPIO peripheral offsets are in
 rpihub75.h. There is a #ifdef PI3, PI4 and it defaults to PI5. If you are inclined, please test on an earlier PI
-and send a PR with the correct offsets for ZERO, PI3 and PI4.
+and send a PR with the correct offsets for ZERO, PI3, and PI4.
 
 
 Please read HZeller's excellent write-up on wiring the PI to the HUB75 display.  I highly recommend using one of his
-active 3 port boards to ensure proper level translation and to map the address lines, OE and clock pins to all 3 boards
+active 3 port boards to ensure proper level translation and to map the address lines, OE, and clock pins to all 3 boards
 
 Hub75 Operation
 ---------------
@@ -75,7 +81,7 @@ A,B,C,D,E are the address lines. These 5 pins represent the row address. 2^5 = 3
 set on the address lines, the 2 corresponding led rows will be addressed for shifting in data. Data is shifted in on
 the falling edge of CLK. so after setting the address line, we set pixel value for column 0 along with clock, and then
 we pull the clock low. That is pixel 0. We now shift in the next pixel and so on 64 times. If we have multiple panels we
-simply continue shifting in data (in 64 column chunks) for as many panels as we have.
+simply continue shifting in data (in 64-column chunks) for as many panels as we have.
 
 To actually update the panel, we must bring OE (output enable) line high (to disable to display) and toggle the latch
 pin. data for one row is now latched. we advance the address row lines drop the enable pin low (turn the display on)
@@ -85,8 +91,8 @@ and begin the process again.
 Operation:
 ----------
 The library bit bangs the data out to the HUB75 panel at a steady 20Mhz. This is significantly faster on my scope than
-hzeller's implementation by up to 10x. The software forks a thread that pulls from the pwm data and continuously pulses 
-the rgb pins and the clock line. After each row, Output Enable pin is driven high and the data is latched and the next
+hzeller's implementation by up to 10x. The software forks a thread that pulls from the PWM data and continuously pulses 
+the rgb pins and the clock line. After each row, the Output Enable pin is driven high and the data is latched and the next
 row is advanced. After 32 rows (or 1/2 panel height) are written to all 3 ports, the BCM buffer is advanced and the 
 update begins again for the next "bit plane".
 
@@ -95,7 +101,7 @@ to shift in data for 1 64x64 panel. This translates to a single 64x64 panel refr
 4 panels together per port at >2400Hz. 
 
 Rather than call "SetPixel", you draw directly to a 24bpp or 32bpp buffer and then call this library's function
-map_byte_image_to_bcm() to translate the 24bpp RGB buffer to the bcm signal. The buffer that this function writes the BCM
+map_byte_image_to_bcm() to translate the 24bpp RGB buffer to the BCM signal. The buffer that this function writes the BCM
 data is read from on another thread via the render_forever() method.
 
 The render_forever() method will run until scene->do_render is set to false.
@@ -139,7 +145,7 @@ set_pixel32(imageRGBA, 32, 16, 255, 128, 0);
 
 
 Users can update either 24bpp RGB or 32bpp RGBA frame buffers directly and then call map_byte_image_to_bcm() after rendering
-a new frame. Calling this method will translate the RGB data to pwm bit data. pwm data is organized as a multi dimensional
+a new frame. Calling this method will translate the RGB data to BCM bit data. BCM data is organized as a multi dimensional
 array of uint32_t data. Each uint32_t stores a bitmask for the r1,r2,g1,g2,b1,b2 pins for the current pixel's bit-plane. There
 is no need to call any other functions as the "render_forever()" code pulls directly from this buffer.
 
@@ -147,11 +153,11 @@ is no need to call any other functions as the "render_forever()" code pulls dire
 RGB to PWM Mapping
 ------------------
 
-Data is indexed as follows where pwm is the current bit plane index (0 - bit_depth):
+Data is indexed as follows where bcm is the current bit plane index (0 - bit_depth):
 
-int offset = ((y * scene->width + (x)) * scene->bit_depth) + pwm;
+int offset = ((y * scene->width + (x)) * scene->bit_depth) + bcm;
 
-using a linear mapping for RGB (255, 128, 0), the pwm data for a single pixel would map to:
+using a linear mapping for RGB (255, 128, 0), the bcm data for a single pixel would map to:
 r: 1,1,1,1,1,1,1,1,1,1,1...
 g: 1,0,1,0,1,0,1,0,1,0,1...
 b: 0,0,0,0,0,0,0,0,0,0,0...
@@ -169,21 +175,21 @@ to produce excellent results and higher frame rates have diminishing returns aft
 Because we are have a 9600-2400Hz refresh rate we are able to use up to 64bit PWM cycles. That means that each RGB value
 can have 64 levels of brightness or 64*64*64 = 262144 colors. In practice though, values at the lower end (more bits off
 than on) have a much more perceptible effect on brightness than values at the higher end (more on than off). This is because
-the human eye is much more sensitive to brightness changes in darker levels than at brighter levels. To correct this I have
+the human eye is much more sensitive to brightness changes at darker levels than at brighter levels. To correct this I have
 added gamma correction. See color calibration further in this document for details.
 
 
 brightness is controlled via a 9K "jitter mask". 9K of random bytes are generated and if each random value is > brightness
 level (uint8_t) the OE pin is toggled for the mask. when OE is toggled high, the display is toggled off. By applying this 
-mask for every pixel, we are able to output our normal pwm color data and toggle the brightness value on or off randomly
+mask for every pixel, we are able to output our normal BCM color data and toggle the brightness value on or off randomly
 averaging out to the current brightness level. This provides for very fine tuned brightness control (255 levels) while
 maintaining excellent color balance.
 
 Alternatively, you can encode brightness data directly into the PWM data, however, this yields very poor results for low
-brightness levels even when using 64 bits of pwm data. this is controlled via the scene_info->jitter_brightness boolean.
+brightness levels even when using 64 bits of BCM data. this is controlled via the scene_info->jitter_brightness boolean.
 
 
-The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128-bit SIMD vectors for the innermost
+The mapping from 24bpp (or 32bpp) RGB data to BCM data is very optimized. It uses 128-bit SIMD vectors for the innermost
 loop. All 3 output ports are mapped in a single line of code, allowing the compiler to compute the value of all pins
 and then update memory in 1 atomic operation.
 
