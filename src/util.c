@@ -15,6 +15,7 @@
 
 #include "util.h"
 #include "rpihub75.h"
+#include "pixels.h"
 
 
 extern char *optarg;
