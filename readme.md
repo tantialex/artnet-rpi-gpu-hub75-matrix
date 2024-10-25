@@ -2,13 +2,27 @@ This library implements HUB75 protocol on the rpi5
 ==================================================
 
 This is loosely based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
-as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html)
+as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
+for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
 
 Glossary
 --------
 *PWM* modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
 
 *BCM* modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
+
+*Gamma* mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
+are spread out so that the color values ramp exponentially. This more closely matches human eye perception but does
+remove dynamic range at the low end of the spectrum producing image quantization in darker regions.
+
+*Dithering* When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
+
+*Tone Mapping* Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
+mapping function. These functions are designed to compress the upper and lower regions of an image to preserve High Dynamic
+Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
+your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
+
+
 
 Overview
 --------
@@ -94,7 +108,7 @@ scene_info *scene = default_scene(argc, argv);
 uint8_t *imageRGB = (uint8_t*)malloc(scene->width * scene->height * scene->stride); 
 
 int x = 32;
-int y = 32;
+int y = 16;
 uint8_t red = 255; 
 uint8_t green = 128; 
 uint8_t blue = 64; 
@@ -114,10 +128,10 @@ these functions are inline versions of the above code.
 // extern int global_width;
 scene_info *scene = default_scene(argc, argv);
 // write to a 24bpp RGB buffer (3 bytes per pixel)
-set_pixel24(imageRGB, 32, 32, 255, 128, 0);
+set_pixel24(imageRGB, 32, 16, 255, 128, 0);
 
 // write to a 32bpp RGB buffer (4 bytes per pixel, 4th byte alpha channel is ignored)
-set_pixel32(imageRGBA, 32, 32, 255, 128, 0);
+set_pixel32(imageRGBA, 32, 16, 255, 128, 0);
 ```
 
 32bpp RGBA buffer support is useful when pulling data from OpenGL which will output 32bpp RGBA data.
@@ -170,28 +184,45 @@ brightness levels even when using 64 bits of pwm data. this is controlled via th
 
 
 The mapping from 24bpp (or 32bpp) RGB data to pwm data is very optimized. It uses 128-bit SIMD vectors for the innermost
-loop. I have attempted to remove the (!!( operator to no avail. If you can improve the bit operations in this loop, this
-is 90% of the program time. mask_lookup is 1ULL << j. bcm_signal[offset] is the current pixel start of the pwm bit plane.
-pwm_clear_mask is an inverse bit mask for the RGB pins of the current port. port[0] - port[6] are the rgb pins 1-6.
-r1_pwm is the linear 8-bit rgb value to 64-bit pwm dat a lookup table for red, green, blue. etc.
+loop. All 3 output ports are mapped in a single line of code, allowing the compiler to compute the value of all pins
+and then update memory in 1 atomic operation.
 
 
 ```c
 for (int j=0; j<bit_depth; j++) {
         // mask off just this bit plane's data
-        uint64_t mask = mask_lookup[j];
+        uint64_t mask = 1L << j;
 
-        // clear just the bits on this port for this bit plane so we don't accidentally clear other rgb ports
-        // Set the bits if the pwm value is set for this bit plane using bitmask instead of ternary
-        // the clear_mask sets all bits for other ports to 1 so that we don't interfere with the other ports
-        bcm_signal[offset] = (bcm_signal[offset] & pwm_clear_mask) |
-            (port[0] & (uint64_t)-(!!(r1_pwm & mask))) |
-            (port[1] & (uint64_t)-(!!(r2_pwm & mask))) |
-            (port[2] & (uint64_t)-(!!(g1_pwm & mask))) |
-            (port[3] & (uint64_t)-(!!(g2_pwm & mask))) |
-            (port[4] & (uint64_t)-(!!(b1_pwm & mask))) |
-            (port[5] & (uint64_t)-(!!(b2_pwm & mask)));
-        offset++;
+        bcm_signal[bcm_offset++] =
+            // PORT 0, top pixel
+            (!!(bits[image[0]] & mask)) << ADDRESS_P0_R1 |
+            (!!(bits[image[1]] & mask)) << ADDRESS_P0_G1 |
+            (!!(bits[image[2]] & mask)) << ADDRESS_P0_B1 |
+
+            // PORT 0, bottom pixel
+            (!!(bits[image[p0b+0]] & mask)) << ADDRESS_P0_R2 |
+            (!!(bits[image[p0b+1]] & mask)) << ADDRESS_P0_G2 |
+            (!!(bits[image[p0b+2]] & mask)) << ADDRESS_P0_B2 |
+
+            // PORT 1, bottom pixel
+            (!!(bits[image[p1t+0]] & mask)) << ADDRESS_P1_R1 |
+            (!!(bits[image[p1t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p1t+2]] & mask)) << ADDRESS_P1_B1 |
+
+            // PORT 1, bottom pixel
+            (!!(bits[image[p1b+0]] & mask)) << ADDRESS_P1_R2 |
+            (!!(bits[image[p1b+1]] & mask)) << ADDRESS_P1_G2 |
+            (!!(bits[image[p1b+2]] & mask)) << ADDRESS_P1_B2 |
+
+            // PORT 2, bottom pixel
+            (!!(bits[image[p2t+0]] & mask)) << ADDRESS_P1_R1 |
+            (!!(bits[image[p2t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p2t+2]] & mask)) << ADDRESS_P1_B1 |
+
+            // PORT 2, bottom pixel
+            (!!(bits[image[p2b+0]] & mask)) << ADDRESS_P2_R2 |
+            (!!(bits[image[p2b+1]] & mask)) << ADDRESS_P2_G2 |
+            (!!(bits[image[p2b+2]] & mask)) << ADDRESS_P2_B2;
     }
 ```
 
@@ -227,18 +258,19 @@ make libgpu
 make 
 # install headers and libraries in /usr/local
 sudo make install
+# you may need to manullay run "sudo ldconfig" depending on your OS ennvironment
 
-# to compile your app without GPU support:
-gcc -lrpihub75 myapp.c -o myapp 
+# to compile the example app without GPU support:
+gcc -O3 -Wall -lrpihub75 example.c -o example 
 
-# to compile your app with GPU support:
-gcc -lrpihub75_gpu myapp.c -o myapp 
+# to compile the example app with GPU support:
+gcc -O3 -Wall -lrpihub75_gpu example.c -o example 
 
 # print command line configuration help
-./myapp 
+./example 
 
-# run glsl shader app for 1 64x64 panel on port0, 64 bits pwm depth, gamma 2.2, 50% brightness
-./myapp -p 1 -c 1 -h 64 -w 64 -d 64 -g 2.2 -b 128 -s shaders/cartoon.glsl
+# run glsl shader app for 1 64x64 panel on port0, 120fps, 48 bits bcm depth, gamma 2.2, 50% brightness
+./example -p 1 -c 1 -x 64 -y 64 -d 48 -g 2.2 -f 120 -b 128 -s shaders/cartoon.glsl
 
 ```
 
@@ -252,6 +284,10 @@ Example Program
 #include <rpihub75/util.h>
 #include <rpihub75/gpu.h>
 
+unsigned int ri(unsigned int max) {
+	return rand() % max;
+}
+
 // our CPU rendering implementation, see gpu.c for shader rendering details
 void* render_cpu(void *arg) {
     // get the current scene info
@@ -263,14 +299,26 @@ void* render_cpu(void *arg) {
     for(;;) {
         // darken every pixel in the image
         for (int x=0; x<buffer_sz; x++) {
-            image[x] = (uint8_t)(image[x] * 0.99f);
+            image[x] = (uint8_t)(image[x] * 0.96f);
         }
 
-        // draw random square - this function is provided by rpihub75 library
-        draw_square(image, scene->width, scene->height, scene->stride);
+        uint16_t x1 = ri(scene->width);
+        uint16_t x2 = ri(scene->width);
+        uint16_t x3 = ri(scene->width);
+        uint16_t y1 = ri(scene->height);
+        uint16_t y2 = ri(scene->height);
+        uint16_t y3 = ri(scene->height);
+
+        RGB color = {ri(250), ri(250), ri(250)};
+
+        // draw a random antialised triangle, see pixels.h for drawing primatives
+        // drawing primatives begin with "hub_" and draw to scene->image buffer
+        hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color);
 
         // render the RGB data to the active PWM buffers. sleep delay the frame to sync with scene->fps
-        scene->pwm_mapper(image, scene, TRUE);
+        // you can optionally draw directly into *image, and then pass image
+        // to scene->bcm_mapper(scene, image, TRUE);
+        scene->bcm_mapper(scene, NULL, TRUE);
     }
 
 
@@ -307,8 +355,8 @@ You can configure your setup for your application from the command line if you s
 
 This will parse the following command line parameters and setup your scene_info configuration for you.
 If you prefer you can also hard code this configuration or load it from a configuration file. This structure
-is required to call render_forever() and the scene->pwm_mapper() function pointer points to the current
-pwm_mapping function for the scene. (see func_pwm_mapper_t)
+is required to call render_forever() and the scene->bcm_mapper() function pointer points to the current
+pwm_mapping function for the scene. (see func_bcm_mapper_t)
 
 
 ```txt
@@ -324,15 +372,14 @@ pwm_mapping function for the scene. (see func_pwm_mapper_t)
      -g <gamma>        gamma correction         (1.0-2.8)
      -d <bit depth>    bit depth                (2-32)
      -b <brightness>   overall brightness level (0-255)
-     -j                disable jitter, adjust PWM brightness instead
-     -l <frames>       motion blur frames       (0-32)
-     -v                vertical mirror image
-     -m                mirror output image
-     -i <mapper>       image mapper (u, image mapper not completed yet)
-     -t <tone_mapper>  (aces, reinhard, hable)
+     -m <frames>       motion blur frames       (0-32)
+     -l <dither>       dither strength, 0 = off (0-255)
+     -i <mapper>       image mapper (mirror, flip, mirror_flip)
+     // both sigmoid and saturation tone mappers accept a level ie: saturation:2.0
+     -t <tone_mapper>  (aces, reinhard, none, saturation:0.5-5.0, sigmoid:0.5-2.0, hable)
+     -j                adjust brightness in BCM data, not recommended
      -z                run LED calibration script
      -n                display data from UDP server on port 22222
-     -h                this help
 ```
 
 
@@ -391,8 +438,15 @@ silky smooth hub75 panels
 ``` bash
 sudo apt update
 sudo apt upgrade
+# build dependencies for rpi-gpu-hub75-matrix
 sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
+# for compiling the PREEMPT_RT kernel patch (optional)
 sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
+# for compiling the video player support (optional) (currently in devlopment)
+sudo apt install libavformat-dev libswscale-dev ffmpeg
+# you must reboot after installing ffmepg libraries to use opengl.
+# not sure why this is, but you should reboot after intalling the ffmpeg dependencies
+
 
 git clone https://github.com/bitslip6/rpi-gpu-hub75-matrix
 cd rpi-gpu-hub75-matrix
@@ -403,6 +457,14 @@ sudo make install
 gcc example.c -O3 -lrpihub75_gpu -o example
 # render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
 ./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
+# render a IQ's "happy jumping" shader to 128x128 panel, bit depth 64, 2 ports, 2 panels, 60 fps, 
+# mirrored and flippeed, 255 brightness (100%), gamma 2.4, saturation tone mapping level 1.8
+./example -x 128 -y 128 -d 64 -p 2 -c 2 -f 60 -i mirror_flip -b 255 -g 2.4 -t saturation:1.8 -s shaders/happy_jump.glsl
+# render the triangle demo on the CPU, see example.c for basic library usage.
+./example -x 128 -y 128 -d 64 -f 60
+# render the lines gpu shader, 24 bit, with strong floyd steinberg dithering (-l 1-254), gamma 2.2
+./example -x 128 -y 128 -d 24 -f 60 -l 250 -g 2.2 -s shaders/lines.glsl
+# comming soon, mp4 drawing, network drawing, improved dithering
 
 
 # real time kernel patch to remove any flicker:

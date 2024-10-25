@@ -1,7 +1,8 @@
 
 # Compiler and flags
 CC = gcc
-CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Wdouble-promotion -Iinclude
+#CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Wdouble-promotion -Iinclude
+CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Iinclude
 LDFLAGS = -lpthread -lrt -lm -lc
 
 # Directories
@@ -93,4 +94,4 @@ $(BUILDDIR)/%.o: src/%.c | $(BUILDDIR)
 $(BUILDDIR)/util.o: src/util.c include/util.h
 $(BUILDDIR)/pixels.o: src/pixels.c 
 $(BUILDDIR)/gpio.o: src/gpio.c include/rpihub75.h
-$(BUILDDIR)/gpu.o: src/gpu.c include/rpihub75.h
+$(BUILDDIR)/gpu.o: src/gpu.c include/rpihub75.h include/stb_image.h

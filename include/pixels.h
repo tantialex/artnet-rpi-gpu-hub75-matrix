@@ -83,9 +83,8 @@ void update_bcm_signal_32(
  * 
  * @param scene the scene information
  * @param image the image to map to the scene bcm data. if NULL scene->image will be used
- * @param do_fps_sync if true, the function will attempt to usleep delay sync to the scene->fps
  */
-void map_byte_image_to_bcm(scene_info *scene, const uint8_t *image, const uint8_t do_fps_sync);
+void map_byte_image_to_bcm(scene_info *scene, uint8_t *image);
 
 /**
  * @brief convert linear RGB to normalized CIE1931 XYZ color space
@@ -187,7 +186,7 @@ Normal hable_tone_map(const Normal color);
  * @return Normal  - the gamma corrected value
  */
 __attribute__((pure))
-Normal reinhard_tone_map(const Normal color);
+Normal reinhard_tone_map(const Normal color, const float level);
 
 /**
  * @brief  perform aces tone mapping
@@ -211,7 +210,19 @@ void aces_tone_mapper8(const RGB *__restrict__ in, RGB *__restrict__ out);
  * @param in pointer to the input RGB 
  * @param out pointer to the output RGB 
  */
-void aces_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
+void aces_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level);
+
+/**
+ * @brief perform Saturation tone mapping for a single pixel
+ * 
+ * @param in pointer to the input RGB 
+ * @param out pointer to the output RGB 
+ */
+
+void saturation_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level);
+
+void sigmoid_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level) ;
+
 
 /**
  * @brief perform hable Uncharted 2 tone mapping for a single pixel
@@ -227,7 +238,7 @@ void hable_tone_mapper(const RGB *__restrict__ in, RGB *__restrict__ out);
  * @param in pointer to the input RGB 
  * @param out pointer to the output RGB 
  */
-void hable_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
+void hable_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level);
 
 /**
  * @brief perform hable Uncharted 2 tone mapping for a single pixel
@@ -235,7 +246,7 @@ void hable_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
  * @param in pointer to the input RGB 
  * @param out pointer to the output RGB 
  */
-void reinhard_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
+void reinhard_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level);
 
 /**
  * @brief perform ACES reinhard mapping for a single pixel
@@ -251,7 +262,7 @@ void reinhard_tone_mapper(const RGB *__restrict__ in, RGB *__restrict__ out);
  * @param in 
  * @param out 
  */
-void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
+void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out, const float level);
 
 
 /**
@@ -262,7 +273,7 @@ void copy_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
  * 
  */
 __attribute__((cold))
-void *tone_map_rgb_bits(const scene_info *scene, int num_bits);
+void *tone_map_rgb_bits(const scene_info *scene, const int num_bits, float *quant_errors);
 
 
 
@@ -382,6 +393,19 @@ void hub_pixel_alpha(scene_info *scene, const int x, const int y, const RGBA pix
  * @param color 
  */
 void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uint16_t x2, const uint16_t y2, const RGB color);
+
+/**
+ * @brief Draw an unfilled circle using Bresenham's algorithm
+ * 
+ * @param scene 
+ * @param width 
+ * @param height 
+ * @param centerX 
+ * @param centerY 
+ * @param radius 
+ * @param color 
+ */
+void hub_circle(scene_info *scene, const uint16_t centerX, const uint16_t centerY, const uint16_t radius, const RGB color);
 
 void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uint16_t y1, Gradient gradient); 
 

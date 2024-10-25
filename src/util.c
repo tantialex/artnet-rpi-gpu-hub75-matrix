@@ -19,7 +19,6 @@
 
 
 extern char *optarg;
-uint16_t global_width = 0;
 
 /**
  * @brief die with a message
@@ -54,68 +53,77 @@ void debug(const char *format, ...) {
 
 
 /**
- * @brief write data to a file
+ * @brief write data to a file, exit on any failure
  * 
  * @param filename filename to write to (wb)
  * @param data data to write
  * @param size number of bytes to write
  * @return int number of bytes written, -1 on error
  */
-int file_put_contents(const char *filename, const void *data, size_t size) {
+int file_put_contents(const char *filename, const void *data, const size_t size) {
     FILE *file = fopen(filename, "wb");
     if (!file) {
-        return -1;
+        die("unable to write to file: %s\n", filename);
     }
     size_t written = fwrite(data, 1, size, file);
-    fclose(file);
+    if (written != size) {
+        die("failed to write bytes to file: %s, [%d of %d]\n", filename, written, size);
+    }
+    if (fclose(file) != 0) {
+        die("failed to close file: %s\n", filename);
+    }
     return written;
 }
 
 /**
  * @brief read in a file, allocate memory and return the data. caller must free.
  * this function will set filesize, you do not need to pass in filesize.
+ * exit on any failure
  * 
  * @param filename - file to read
  * @param filesize - pointer to the size of the file. will be set after the call. ugly i know
  * @return char* - pointer to read data. NOTE: caller must free
  */
 char *file_get_contents(const char *filename, long *filesize) {
-    FILE *file = fopen(filename, "rb");  // Open the file in binary mode
+    // Open the file in binary mode
+    FILE *file = fopen(filename, "rb"); 
     if (file == NULL) {
-        perror("Could not open file");
-        return NULL;
+        die("Could not open file: %s\n", filename);
     }
 
     // Seek to the end of the file to determine its size
     fseek(file, 0, SEEK_END);
     *filesize = ftell(file);
-    rewind(file);  // Go back to the beginning of the file
+    // Go back to the beginning of the file
+    rewind(file);
 
     // Allocate memory for the file contents + null terminator
     char *buffer = (char *)malloc(*filesize + 1);
     if (buffer == NULL) {
-        perror("Memory allocation failed");
-        fclose(file);
-        return NULL;
+        die("Memory allocation failed reading file %s of %d bytes\n", filename, *filesize);
     }
 
     // Read the file into the buffer
     size_t read_size = fread(buffer, 1, *filesize, file);
     if (read_size != *filesize) {
-        perror("Failed to read the complete file");
-        free(buffer);
-        fclose(file);
-        return NULL;
+        die("Failed to read the complete file %s, read %d of %d bytes\n", filename, read_size, *filesize);
     }
 
     // Null-terminate the string
     buffer[*filesize] = '\0';
 
-    fclose(file);
+    if (fclose(file) != 0) {
+        die("failed to close file: %s\n", filename);
+    }
     return buffer;
 }
 
-// Helper function to print a number in binary format
+/**
+ * @brief print a 32 bit number in binary format to stdout
+ * 
+ * @param fd 
+ * @param number 
+ */
 void binary32(FILE *fd, const uint32_t number) {
     // Print the number in binary format, ensure it only shows 11 bits
     for (int i = 31; i >= 0; i--) {
@@ -124,7 +132,12 @@ void binary32(FILE *fd, const uint32_t number) {
 }
 
 
-// Helper function to print a number in binary format
+/**
+ * @brief print a 64 bit number in binary format to stdout
+ * 
+ * @param fd 
+ * @param number 
+ */
 void binary64(FILE *fd, const uint64_t number) {
     // Print the number in binary format, ensure it only shows 11 bits
     for (int i = 63; i >= 0; i--) {
@@ -132,24 +145,30 @@ void binary64(FILE *fd, const uint64_t number) {
     }
 }
 
-int rnd(unsigned char *buffer, size_t size) {
+/**
+ * @brief read size random data from /dev/urandom into the buffer
+ * 
+ * @param buffer 
+ * @param size 
+ * @return int - always 0
+ */
+int rnd(unsigned char *buffer, const size_t size) {
     // Open /dev/urandom for strong random data
     int fd = open("/dev/urandom", O_RDONLY);
     if (fd < 0) {
-        perror("Failed to open /dev/urandom");
-        return -1;
+        die("unable to open /dev/urandom\n");
     }
 
     // Read 'size' bytes from /dev/urandom into the buffer
     ssize_t bytes_read = read(fd, buffer, size);
     if (bytes_read != size) {
-        perror("Failed to read random data");
-        close(fd);
-        exit(-1);
+        die("unable to read %d bytes from /dev/urandom\n", size);
     }
 
     // Close the file descriptor
-    close(fd);
+    if (close(fd) != 0) {
+        die("failed to close /dev/urandom\n");
+    }
     return 0;
 }
 
@@ -161,26 +180,26 @@ int rnd(unsigned char *buffer, size_t size) {
  * @param brightness   larger values produce brighter output, max 255
  * @return uint32_t*   a pointer to the jitter mask. caller must release memory
  */
-uint32_t *create_jitter_mask(uint16_t jitter_size, uint8_t brightness) {
+uint32_t *create_jitter_mask(const uint16_t jitter_size, const uint8_t brightness) {
     srand(time(NULL));
-    uint32_t *jitter = (uint32_t*)malloc(jitter_size*sizeof(uint32_t));
-    uint8_t *raw_crypto = (uint8_t*)malloc(jitter_size);
-    memset(jitter, 0, jitter_size*sizeof(uint32_t));
-    // read random data from urandom into the raw_crypto buffer
-    rnd(raw_crypto, jitter_size);
-    // map raw crypto data to the global OE jitter mask (toggle the OE pin on/off for JITTERS_SIZE frames)
+    uint32_t *jitter  = (uint32_t*)malloc(jitter_size*sizeof(uint32_t));
+    uint8_t *raw_data = (uint8_t*) malloc(jitter_size);
+
+    // read random data from urandom into the raw_data buffer
+    rnd(raw_data, jitter_size);
+
+    // map raw data to the global OE jitter mask (toggle the OE pin on/off for JITTERS_SIZE frames)
     for (int i=0; i<jitter_size; i++) {
-        if (raw_crypto[i] > brightness) {
+        if (raw_data[i] > brightness) {
             jitter[i] = PIN_OE;
         }
     }
 
-    //return jitter;
-
-    // make 5 passes at long run reduction ....
-    for (int j = 0; j < 3; j++) {
+    // look for runs of 4 or more 1 or 0. where we find a run, regenerate the data
+    // make 3 passes at long run reduction, #defines in rpihub75.h  ....
+    for (int j = 0; j < JITTER_PASSES; j++) {
         // Detect and redistribute runs of >4 identical bits
-        for (int i = 0; i < jitter_size - 4; i++) {
+        for (int i = 0; i < jitter_size - JITTER_MAX_RUN_LEN; i++) {
             int run_length = 1;
 
             // Check if we have a run of similar bits (either all set or all clear)
@@ -189,8 +208,8 @@ uint32_t *create_jitter_mask(uint16_t jitter_size, uint8_t brightness) {
             }
 
             // If the run length is more than 3, recalculate the bits
-            if (run_length > 3) {
-                // recreate these bits
+            if (run_length >= JITTER_MAX_RUN_LEN) {
+                // recreate these bits, enchancement: pull bits from /dev/urandom 
                 for (int j = i; j < i + run_length; j++) {
                     jitter[j] = ((rand() % 255) > brightness) ? PIN_OE : 0;  // Randomly set or clear the OE pin
                 }
@@ -201,34 +220,65 @@ uint32_t *create_jitter_mask(uint16_t jitter_size, uint8_t brightness) {
         }
     }
 
-    free(raw_crypto);
+    free(raw_data);
     return jitter;
 }
 
 
-void calculate_fps(long sleep_time) {
+/**
+ * @brief count number of times this function is called, 1 every second output
+ * the number of times called and reset the counter. This function can not
+ * be called from multiple locations. It is not thread safe.
+ * 
+ * @param target_fps - target a sleep time to achieve this fps
+ * @return long - returns sleep time in microseconds
+ */
+long calculate_fps(const uint16_t target_fps) {
     // Variables to track FPS
-    static int frame_count = 0;
-    static time_t last_time = 0;
-    //static int fps = 0;
-    time_t current_time = time(NULL);
+    static unsigned int frame_count = 0;
+    static time_t       last_time_s = 0;
+    long                sleep_time  = 0;
+    uint32_t target_frame_time_us   = (1000000 / target_fps);
+    time_t current_time_s           = time(NULL);
+    struct timespec this_time;
+    static struct timespec last_time;
 
-    // If one second has passed
-    if (current_time != last_time) {
-        // Output FPS
-        printf("FPS: %d (%ld)\n", frame_count, sleep_time);
 
-        // Reset frame count and update last_time
-        // fps = frame_count;
-        frame_count = 0;
-        last_time = current_time;
+    clock_gettime(CLOCK_MONOTONIC, &this_time);
+ 
+    long frame_time = (this_time.tv_sec - last_time.tv_sec) * 1000000L +
+                        (this_time.tv_nsec - last_time.tv_nsec) / 1000L;
+
+    // Sleep for the remainder of the frame time to achieve target_fps
+    sleep_time = target_frame_time_us - frame_time;
+
+    if (sleep_time > 10 && sleep_time < 1000000L) {
+        usleep(sleep_time);
     }
 
-    // Increment the frame counter
     frame_count++;
+
+    // If one second has passed
+    if (current_time_s != last_time_s) {
+        // Output FPS
+        debug("FPS: %d, micro second sleep: %ld\n", frame_count, sleep_time);
+
+        // Reset frame count and update last_time
+        frame_count = 0;
+        last_time_s = current_time_s;
+    } 
+
+    clock_gettime(CLOCK_MONOTONIC, &last_time);
+    return sleep_time;
 }
 
 
+/**
+ * @brief map the gpio pins to memory
+ * 
+ * @param offset 
+ * @return uint32_t* 
+ */
 uint32_t* map_gpio(uint32_t offset) {
 
     int mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
@@ -241,11 +291,9 @@ uint32_t* map_gpio(uint32_t offset) {
         PERI_BASE
     );
         //0x1f00000000 (on pi5 for root access to /dev/mem use this address)
-    if (map == MAP_FAILED)
-    {
-        printf("mmap failed: %s [%ld] / [%lx]\n", strerror(errno), PERI_BASE, PERI_BASE);
-        exit (-4);
-    };
+    if (map == MAP_FAILED) {
+        die("mmap failed: %s [%ld] / [%lx]\n", strerror(errno), PERI_BASE, PERI_BASE);
+    }
     close(mem_fd);
 
     return map;
@@ -266,23 +314,22 @@ char getch() {
 }
  
 
- void configure_gpio(uint32_t *PERIBase) {
+/**
+ * @brief set the GPIO pins for hub75 operation.  this is based on hzeller's active board pinouts
+ * @see https://github.com/hzeller/rpi-rgb-led-matrix
+ * 
+ * @param PERIBase 
+ */
+void configure_gpio(uint32_t *PERIBase) {
     // set all GPIO pins to output mode, fast slew rate, pull down enabled
     // https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html
 
     for (uint32_t pin_num=2; pin_num<28; pin_num++) {
-        uint32_t fn = 5;
         uint32_t *PADBase  = PERIBase + PAD_OFFSET;
         uint32_t *pad = PADBase + 1;   
         uint32_t *GPIOBase = PERIBase + GPIO_OFFSET;
-        uint32_t *RIOBase = PERIBase + RIO_OFFSET;
-	    GPIO[pin_num].ctrl = fn;
+	    GPIO[pin_num].ctrl = 5;
 	    pad[pin_num] = 0x15;
-
-        // these seem to be required. todo: test removing them
-        rioSET->OE = 0x01<<pin_num;
-        rioSET->Out = 0x01<<pin_num;
-        debug("configured pin [%d]\n", pin_num);
     }
 }
 
@@ -296,27 +343,61 @@ void usage(int argc, char **argv) {
     die(
         "Usage 2: %s\n"
         "     -s <shader file>  GPU fragment shader file to render\n"
-        "     -x <width>        image width              (16-384)\n"
-        "     -y <height>       image height             (16-384)\n"
-        "     -w <width>        panel width              (16/32/64)\n"
-        "     -h <height>       panel height             (16/32/64)\n"
-        "     -f <fps>          frames per second        (1-255)\n"
-        "     -p <num ports>    number of ports          (1-3)\n"
-        "     -c <num chains>   number of chains         (1-16)\n"
-        "     -g <gamma>        gamma correction         (1.0-2.8)\n"
-        "     -d <bit depth>    bit depth                (2-32)\n"
-        "     -b <brightness>   overall brightness level (0-255)\n"
-        "     -j                disable jitter, adjust PWM brightness instead\n"
-        "     -l <frames>       motion blur frames       (0-32)\n"
-        "     -v                vertical mirror image\n"
-        "     -m                mirror output image\n"
-        "     -i <mapper>       image mapper (u)\n"
-        "     -t <tone_mapper>  (aces, reinhard, hable)\n"
+        "     -x <width>        total pixel width         (16-512)\n"
+        "     -y <height>       total pixel height        (16-512)\n"
+        "     -w <width>        panel width               (16/32/64)\n"
+        "     -h <height>       panel height              (16/32/64)\n"
+        "     -f <fps>          frames per second         (1-255)\n"
+        "     -p <num ports>    number of ports           (1-3)\n"
+        "     -c <num chains>   number of panels chained  (1-16)\n"
+        "     -g <gamma>        gamma correction          (1.0-2.8)\n"
+        "     -d <bit depth>    bit depth                 (2-64)\n"
+        "     -b <brightness>   overall brightness level  (0-255)\n"
+        "     -l <dither>       dithering intensity level (0-10)\n"
+        "     -m <frames>       motion blur frames        (0-32)\n"
+        "     -i <mapper>       image mapper (mirror, flip, mirror_flip)\n"
+        "     -t <tone_mapper>  (aces, reinhard, none, saturation, sigmoid, hable)\n"
+        "     -j                adjust brightness in pixel BCM, not recommended\n"
         "     -z                run LED calibration script\n"
         "     -n                display data from UDP server on port %d\n"
         "     -h                this help\n", argv[0], SERVER_PORT);
 }
 
+
+/**
+ * @brief Get the nth token of str split by delimiter
+ * not thread safe, returns a pointer to a static buffer
+ * 
+ * @param str 
+ * @param delimiter 
+ * @param position 
+ * @return char* 
+ */
+char *get_nth_token(const char *str, char delimiter, int position) {
+    const int MAX_TOKEN_LENGTH = 256;
+    static char result[256]; // Stack-allocated buffer for the token
+    char temp[strlen(str) + 1]; // Temporary copy of the input string
+    strncpy(temp, str, sizeof(temp));
+    temp[sizeof(temp) - 1] = '\0'; // Ensure null termination
+
+    char *token = strtok(temp, &delimiter);
+    int index = 0;
+
+    // Traverse tokens until the n-th token is found
+    while (token != NULL) {
+        if (index == position) {
+            strncpy(result, token, MAX_TOKEN_LENGTH - 1);
+            result[MAX_TOKEN_LENGTH - 1] = '\0'; // Ensure null termination
+            return result; // Return stack-allocated token
+        }
+        token = strtok(NULL, &delimiter);
+        index++;
+    }
+
+    // Return an empty string if n-th token is not found
+    result[0] = '\0';
+    return result;
+}
 
 /**
  * @brief create a default scene setup using the #DEFINE values
@@ -349,11 +430,12 @@ scene_info *default_scene(int argc, char **argv) {
     scene->jitter_brightness = true;
 
     scene->bit_depth = 32;
-    scene->pwm_mapper = map_byte_image_to_bcm;
+    scene->bcm_mapper = map_byte_image_to_bcm;
     scene->tone_mapper = copy_tone_mapperF;
     scene->brightness = 200;
     scene->motion_blur_frames = 0;
     scene->do_render = TRUE;
+    scene->dither = 0;
 
     // default to 120 fps
     scene->fps = 120;
@@ -365,14 +447,13 @@ scene_info *default_scene(int argc, char **argv) {
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:b:it:ml:i:vjz?")) != -1) {
+    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:m:b:t:l:i:jz?")) != -1) {
         switch (opt) {
         case 's':
             scene->shader_file = optarg;
             break;
         case 'x':
             scene->width = atoi(optarg);
-            global_width = scene->width;
             break;
         case 'y':
             scene->height = atoi(optarg);
@@ -405,15 +486,16 @@ scene_info *default_scene(int argc, char **argv) {
         case 'b':
             scene->brightness = atoi(optarg);
             break;
-        case 'v':
-            scene->invert = true;
-            break;
         case 'm':
-            scene->image_mirror = true;
-            break;
-        case 'l':
             scene->motion_blur_frames = atoi(optarg);
             break;
+        case 'l':
+            //die('dither arg: %s %d\n', optarg, scene->dither);
+            // scene->dither = atoi(optarg);
+            //die('dither arg: %s %d\n', optarg, scene->dither);
+            int dither = atoi(optarg);
+            printf("DITHER!, %d\n", dither);
+            scene->dither = MAX(0, MIN(atoi(optarg), 255));
         case 'j':
             scene->jitter_brightness = false;
             break;
@@ -421,24 +503,53 @@ scene_info *default_scene(int argc, char **argv) {
             scene->gamma = -99.0f;
             break;
         case 't':
-            if (strcmp(optarg, "aces") == 0) {
+            char *lvl = get_nth_token(optarg, ':', 1);
+            printf("lvl: %s\n", lvl);
+            float level = atof(lvl);
+            char *tone = get_nth_token(optarg, ':', 0);
+            scene->tone_level = 1.0f;
+            if (strcmp(tone, "aces") == 0) {
                 scene->tone_mapper = aces_tone_mapperF;
-            } else if (strcmp(optarg, "reinhard") == 0) {
+            } else if (strcmp(tone, "reinhard") == 0) {
+                if (level < 0.1f || level  > 5.0f) {
+                    level = 1.0f;
+                }
+                scene->tone_level = level;
                 scene->tone_mapper = reinhard_tone_mapperF;
-            } else if (strcmp(optarg, "hable") == 0) {
+            } else if (strcmp(tone, "hable") == 0) {
                 scene->tone_mapper = hable_tone_mapperF;
-            } else if (strcmp(optarg, "none") == 0) {
+            } else if (strcmp(tone, "none") == 0) {
                 scene->tone_mapper = copy_tone_mapperF;
+            } else if (strcmp(tone, "saturation") == 0) {
+                if (level < 0.1f || level  > 5.0f) {
+                    level = 1.0f;
+                }
+                scene->tone_level = level;
+                scene->tone_mapper = saturation_tone_mapperF;
+            } else if (strcmp(tone, "sigmoid") == 0) {
+                if (level < 0.1f || level  > 5.0f) {
+                    level = 1.0f;
+                }
+                scene->tone_level = level;
+                scene->tone_mapper = sigmoid_tone_mapperF;
             } else {
-                die("Unknown tone mapper: %s, must be one of (aces, reinhard, hable, none)\n", optarg);
+                die("Unknown tone mapper: %s, must be one of (aces, reinhard, hable, saturation, sigmoid, none)\n", optarg);
             }
             break;
         case 'i':
             if (strcasecmp(optarg, "u") == 0) {
-                debug("set U mapper\n");
                 scene->image_mapper = u_mapper_impl;
+            }
+            else if (strcasecmp(optarg, "flip") == 0) {
+                scene->image_mapper = flip_mapper;
+            }
+            else if (strcasecmp(optarg, "mirror") == 0) {
+                scene->image_mapper = mirror_mapper;
+            }
+            else if (strcasecmp(optarg, "mirror_flip") == 0) {
+                scene->image_mapper = mirror_flip_mapper;
             } else {
-                die("Unknown tone mapper: %s, must be one of (aces, reinhard, hable, none)\n", optarg);
+                die("Unknown image mapper: %s, must be one of (u, mirror, flip, mirror_flip)\n", optarg);
             }
             break;
         default:
@@ -456,12 +567,18 @@ scene_info *default_scene(int argc, char **argv) {
     return scene;
 }
 
-
+/**
+ * @brief draw various test patterns to the display
+ * 
+ * @param arg 
+ * @return void* 
+ */
 void *calibrate_panels(void *arg) {
     scene_info *scene = (scene_info*)arg;
-    printf("Point your browser to: file:///home/cory/mnt/calibration.html\n");
+    printf("Point your browser to: calibration.html the rpi_gpu_hub75_matrix directory\n");
     printf("After calibrating each set of vertical bar.  press any key on your browser window to continue\n\n");
 
+    printf("Keyboard commands:\n");
     printf("a - lower gamma,          A - raise gamma\n");
     printf("r - lower red linearly,   R - raise red linearly\n");
     printf("g - lower green linearly, G - raise green linearly\n");
@@ -515,7 +632,7 @@ void *calibrate_panels(void *arg) {
             }
         }
 
-        map_byte_image_to_bcm(scene, image, TRUE);
+        map_byte_image_to_bcm(scene, image);
         char ch = getch();
         if (ch == 'a') {
             scene->gamma -= 0.01f;
@@ -580,7 +697,15 @@ void *calibrate_panels(void *arg) {
 
 
 
-// Function to receive UDP packets and reassemble the frame
+
+/**
+ * @brief function to crete a udp server and pull raw frame data. see the udp_packet struct
+ * for info on the data format
+ * 
+ * exits on any error
+ * @param arg 
+ * @return void* 
+ */
 void* receive_udp_data(void *arg) {
     scene_info *scene = (scene_info *)arg; // dereference the scene info
     int sock;
@@ -632,10 +757,11 @@ void* receive_udp_data(void *arg) {
         memcpy(image_data + ((frame_num * max_frame_sz) + frame_off), packet.data, PACKET_SIZE - 10);
         if (packet_id == total_packets) {
             // map to pwm data
-            scene->pwm_mapper(scene, image_data + (frame_num * max_frame_sz), TRUE);
+            scene->bcm_mapper(scene, image_data + (frame_num * max_frame_sz));
         }
 
     }
 
     close(sock);
+    return NULL;
 }

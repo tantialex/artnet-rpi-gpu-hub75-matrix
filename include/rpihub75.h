@@ -19,15 +19,15 @@
 //////////////////////////////////////////////////////////
 
 #ifndef RED_SCALE
-    #define RED_SCALE 0.99f
+    #define RED_SCALE 0.0f
 #endif
 
 #ifndef GREEN_SCALE
-    #define GREEN_SCALE 1.04f
+    #define GREEN_SCALE 0.0f
 #endif
 
 #ifndef BLUE_SCALE
-    #define BLUE_SCALE 1.0f
+    #define BLUE_SCALE 0.0f
 #endif
 
 #ifndef RED_GAMMA_SCALE
@@ -39,11 +39,11 @@
 #endif
 
 #ifndef BLUE_GAMMA_SCALE
-    #define BLUE_GAMMA_SCALE 0.92f
+    #define BLUE_GAMMA_SCALE 1.0f
 #endif
 
 #ifndef GAMMA
-    #define GAMMA 1.99f
+    #define GAMMA 1.0f
 #endif
 
 
@@ -66,7 +66,7 @@
 //  for bit depths of 4,8,12,16,20,24,28..., use BIT_DEPTH_ALIGNMENT 4
 //  for bit depths of 2,4,6,8,10,.... use BIT_DEPTH_ALIGNMENT 2
 //  for all others use BIT_DEPTH_ALIGNMENT 1
-#define BIT_DEPTH_ALIGNMENT 1
+#define BIT_DEPTH_ALIGNMENT 4
 
 #define SERVER_PORT 22222
 
@@ -75,13 +75,16 @@
 // and decrease L1-L3 cache locality of other data
 #define JITTER_SIZE 9093 
 
+#define JITTER_MAX_RUN_LEN 4
+#define JITTER_PASSES 3
+
 //////////////////////////////////////////////////////////
 
 #ifndef CONSOLE_DEBUG
     #define CONSOLE_DEBUG 1
 #endif
 #ifndef ENABLE_ASSERTS
-    #define ENABLE_ASSERTS 1 
+    #define ENABLE_ASSERTS 0 
 #endif
 #define PACKET_SIZE 1450
 #define PREAMBLE 0xdeadcafe
@@ -218,6 +221,15 @@ typedef struct {
     Normal b; 
 } RGBF;
 
+/**
+ * @brief pointer to a single 24bpp RGB pixel normalized as floats (0-1)
+ * RGBF *pixel_norm = normalize_rgb((RGB *)(image + offset))
+ */
+typedef struct {
+    Normal h;
+    Normal s; 
+    Normal l; 
+} HSLF;
 
 /**
  * @brief a gradient function defines the direction of the gradient
@@ -255,10 +267,10 @@ struct udp_packet {
 struct scene_info;
 
 // void map_byte_image_to_pwm(uint8_t *image, const scene_info *scene, uint8_t fps_sync) {
-typedef void (*func_pwm_mapper_t)(struct scene_info *scene, const uint8_t *image, const uint8_t fps_sync);
-typedef void (*func_tone_mapper_t)(const RGBF *in, RGBF *out);
-typedef uint8_t *(*func_image_mapper_t)(const uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
-typedef uint8_t *(image_mapper_t)(const uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
+typedef void (*func_bcm_mapper_t)(struct scene_info *scene, uint8_t *image);
+typedef void (*func_tone_mapper_t)(const RGBF *in, RGBF *out, const float level);
+typedef uint8_t *(*func_image_mapper_t)( uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
+typedef uint8_t *(image_mapper_t)(uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
 
 
 /**
@@ -286,6 +298,8 @@ typedef struct scene_info {
 
     /** @brief brightness level (0-255) */
     uint8_t brightness;
+    /** @brief dithering strength. (0-10) 0 is off, improves simulated color in dark areas but reduces image sharpness */
+    uint8_t dither;
 
     /** 
      * @brief number of panels connected to each chain on the port (1-8)
@@ -318,7 +332,7 @@ typedef struct scene_info {
      * @see map_byte_image_to_pwm
      * @see map_byte_image_to_pwm_dithered
      */
-    func_pwm_mapper_t pwm_mapper;
+    func_bcm_mapper_t bcm_mapper;
 
 	/** 
      * @brief the tone mapping function to use, if null no tone mapping applied
@@ -343,8 +357,11 @@ typedef struct scene_info {
      */
 	float gamma;
 
-    bool invert;
-    bool image_mirror;
+    /**
+     * @brief optional parameter passed to the tone mapper to determine strength
+     */
+    float tone_level;
+
     bool jitter_brightness;
 
     uint8_t motion_blur_frames;
@@ -390,6 +407,7 @@ typedef struct scene_info {
 void aces_inplace(RGB *in);
 Normal normalize8(const uint8_t in);
 
+/*
 void aces_tone_mapper(const RGB *in, RGB *out);
 void aces_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restrict__ out);
 void hable_tone_mapper(const RGB *in, RGB *out);
@@ -397,11 +415,15 @@ void hable_tone_mapperF(const RGBF *in, RGBF *out);
 void copy_tone_mapperF(const RGBF *in, RGBF *out);
 void reinhard_tone_mapper(const RGB *in, RGB *out);
 void reinhard_tone_mapperF(const RGBF *in, RGBF *out);
+*/
 
 Normal hable_tone_map(const Normal color);
 void hable_inplace(RGB *in);
 void adjust_contrast_saturation_inplace(RGBF *__restrict__ in, const float contrast, const float saturation);
-uint8_t* u_mapper(const uint8_t *image, uint8_t *output_image, const scene_info *scene);
+uint8_t* u_mapper(uint8_t *image, uint8_t *output_image, const scene_info *scene);
+uint8_t *flip_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene);
+uint8_t *mirror_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene);
+uint8_t *mirror_flip_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene);
 
 
 /**
@@ -414,11 +436,20 @@ uint8_t* u_mapper(const uint8_t *image, uint8_t *output_image, const scene_info 
 float mixf(const float x, const float y, const Normal a);
 
 
-void calculate_fps(long sleep_time);
 void *render_shader(void *arg);
 void dither_image(uint8_t *image, int width, int height);
 void apply_noise_dithering(uint8_t *image, int width, int height);
+
+/**
+ * @brief verify that the scene configuration is valid
+ * will die() if invalid configuration is found
+ * @param scene 
+ */
 void check_scene(const scene_info *scene);
+
+
+uint8_t *u_mapper_impl(uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
+uint8_t *flip_mapper_impl(const uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene);
 
 /**
  * @brief render the PWM signal to the GPIO pins forever...

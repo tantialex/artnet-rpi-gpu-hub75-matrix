@@ -49,8 +49,7 @@
 
 /**
  * @brief calculate an address line pin mask for row y
- * 
- * @TODO: make this a lookup table
+ * not used outside this file
  * @param y the panel row number to calculate the mask for
  * @return uint32_t the bitmask for the address lines at row y
  */
@@ -68,7 +67,6 @@ uint32_t row_to_address(const int y, uint8_t half_height) {
     if (row & (1 << 4)) bitmask |= (1 << ADDRESS_E);  // Map bit 4
 
 
-    //printf("row %d = %x\n", row, bitmask);
     return bitmask;
 }
 
@@ -77,18 +75,10 @@ uint32_t row_to_address(const int y, uint8_t half_height) {
 
 /**
  * @brief verify that the scene configuration is valid
+ * will die() if invalid configuration is found
  * @param scene 
  */
 void check_scene(const scene_info *scene) {
-    //uint16_t max_fps = 9600 / scene->bit_depth / (scene->panel_width / 16);
-    uint16_t max_fps = 19200 / scene->bit_depth / (scene->panel_width / 16);
-    (void)max_fps;
-    /*
-    if (scene->fps > max_fps) {
-        fprintf(stderr, "FPS too high for current configuration. max fps is: %d\n", max_fps);
-        exit(EXIT_FAILURE);
-    }
-    */
     if (scene->num_ports > 3) {
         die("Only 3 port supported at this time\n");
     }
@@ -96,13 +86,13 @@ void check_scene(const scene_info *scene) {
         die("Require at last 1 port\n");
     }
     if (scene->num_chains < 1) {
-        die("Require at last 1 panel per chain\n");
+        die("Require at last 1 panel per chain: [%d]\n", scene->num_chains);
     }
     if (scene->num_chains > 16) {
         die("max 16 panels supported on each chain\n");
     }
-    if (scene->pwm_mapper == NULL) {
-        die("A pwm mapping function is required\n");
+    if (scene->bcm_mapper == NULL) {
+        die("A bcm mapping function is required\n");
     }
     if (scene->stride != 3 && scene->stride != 4) { 
         die("Only 3 or 4 byte stride supported\n");
@@ -131,6 +121,128 @@ void check_scene(const scene_info *scene) {
     }
 }
 
+/**
+ * @brief map the lower half of the image to the front of the image. this allows connecting
+ * panels in a left, left, down, right pattern (or right, right, down, left) if the image is
+ * mirrored.
+ * 
+ * NOTE: This code is un-tested. If you have the time, please send me an implementation of U and V
+ * mappers
+ * 
+ * 
+ * @param image - input buffer to map
+ * @param output_image - if NULL, the output buffer will be allocated for you
+ * @param scene - the scene information
+ * @return uint8_t* - pointer to the output buffer
+ */
+uint8_t *u_mapper_impl(uint8_t *image_in, uint8_t *image_out, const struct scene_info *scene) {
+    static uint8_t *output_image = NULL;
+    if (output_image == NULL) {
+        debug("Allocating memory for u_mapper\n"); 
+        output_image = (uint8_t*)aligned_alloc(64, scene->width * scene->height * scene->stride);
+        if (output_image == NULL) {
+            die("Failed to allocate memory for u_mapper image\n");
+        }
+    }
+    if (image_out == NULL) {
+        debug("output image is NULL, using allocated memory\n");
+        image_out = output_image;
+    }
+
+
+    // Split image into top and bottom halves
+    const uint8_t *bottom_half = image_in + (scene->width * (scene->height / 2) * scene->stride);  // Last 64 rows
+    const uint32_t row_length = scene->width * scene->stride;
+
+    debug("width: %d, stride: %d, row_length: %d", scene->width, scene->stride, row_length);
+    // Remap bottom half to the first part of the output
+    for (int y = 0; y < (scene->height / 2); y++) {
+        // Copy each row from bottom half
+        debug ("  Y: %d, offset: %d", y, y * scene->width * scene->stride);
+        memcpy(output_image + (y * scene->width * scene->stride), bottom_half + (y * scene->width * scene->stride), row_length);
+    }
+
+    // Remap top half to the second part of the output
+    for (int y = 0; y < (scene->height / 2); y++) {
+        // Copy each row from top half
+        memcpy(output_image + ((y + (scene->width / 2)) * scene->width * scene->stride), image_in + (y * scene->width * scene->stride), row_length);
+    }
+
+    return output_image;
+}
+
+
+
+image_mapper_t flip_mapper;
+uint8_t *flip_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene) {
+
+    uint16_t row_sz = scene->width * scene->stride;
+
+    uint8_t *temp_row = malloc(row_sz);
+
+    for (uint16_t y=0; y < scene->height / 2; y++) {
+        uint8_t *top_row = image + y * row_sz;
+        uint8_t *bottom_row = image + (scene->height - y - 1) * row_sz;
+
+        // Swap the rows using the temp_row buffer
+        memcpy(temp_row, top_row, row_sz);        // Copy top row to temp buffer
+        memcpy(top_row, bottom_row, row_sz);      // Copy bottom row to top row
+        memcpy(bottom_row, temp_row, row_sz);     // Copy temp buffer (original top row) to bottom row
+    }
+
+    return image;
+}
+
+
+image_mapper_t u_mirror_impl;
+uint8_t *mirror_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene) {
+
+    uint16_t row_sz = scene->width * scene->stride;
+
+    // Iterate through each row
+    for (int y = 0; y < scene->height; y++) {
+        // Get a pointer to the start of the current row
+        uint8_t *row = image + y * row_sz;
+
+        // Swap pixels from left to right within the row
+        for (int x = 0; x < scene->width / 2; x++) {
+            int left_index = x * scene->stride;
+            int right_index = (scene->width - x - 1) * scene->stride;
+
+            // Swap the left pixel with the right pixel (3 bytes: R, G, B)
+            for (int i = 0; i < 3; i++) {
+                uint8_t temp = row[left_index + i];
+                row[left_index + i] = row[right_index + i];
+                row[right_index + i] = temp;
+            }
+        }
+    }
+    return image;
+}
+
+uint8_t *mirror_flip_mapper(uint8_t *image, uint8_t *image_out, const struct scene_info *scene) {
+
+    int row_size = scene->width * scene->stride; // Each row has 'width' pixels, 3 bytes per pixel (R, G, B)
+    uint8_t temp_pixel[3];    // Temporary storage for a single pixel (3 bytes: R, G, B)
+
+    // Iterate through the top half of the image
+    for (int y = 0; y < scene->height / 2; y++) {
+        uint8_t *top_row = image + y * row_size;
+        uint8_t *bottom_row = image + (scene->height - y - 1) * row_size;
+
+        // Swap pixels from left to right within both the top and bottom rows
+        for (int x = 0; x < scene->width; x++) {
+            int left_index = x * scene->stride;
+            int right_index = (scene->width - x - 1) * scene->stride;
+
+            // Swap top-left pixel with bottom-right pixel (3 bytes: R, G, B)
+            memcpy(temp_pixel, &top_row[left_index], scene->stride);                  // Store top-left pixel
+            memcpy(&top_row[left_index], &bottom_row[right_index], scene->stride);    // Move bottom-right to top-left
+            memcpy(&bottom_row[right_index], temp_pixel, scene->stride);              // Move temp (top-left) to bottom-right
+        }
+    }
+    return image;
+}
 
 /**
  * @brief you can cause render_forever to exit by updating the value of do_hub65_render pointer
@@ -172,6 +284,7 @@ void render_forever(const scene_info *scene) {
         memset(jitter_mask, 0, JITTER_SIZE);
     }
 
+    // store the row to address mapping in an array for faster access
     uint32_t addr_map[half_height];
     for (int i=0; i<half_height; i++) {
         addr_map[i] = row_to_address(i, half_height);
@@ -179,7 +292,7 @@ void render_forever(const scene_info *scene) {
 
 
 
-    uint8_t bright = scene->brightness;
+    // uint8_t bright = scene->brightness;
     while(scene->do_render) {
 
         // iterate over the bit plane
@@ -205,7 +318,7 @@ void render_forever(const scene_info *scene) {
                     // advance the global OE jitter mask 1 frame
                     jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
 
-                    // advance to the next bit in the bcm signal
+                    // advance to the next pixel in the bcm signal
                     offset += bit_depth;
                 }
                 // make sure enable pin is high (display off) while we are latching data
@@ -235,3 +348,5 @@ void render_forever(const scene_info *scene) {
         //POST_TIME;
     }
 }
+
+
