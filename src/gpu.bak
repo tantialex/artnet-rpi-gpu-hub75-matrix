@@ -340,16 +340,55 @@ void *render_shader(void *arg) {
 
                 pixelsO[i] = (uint8_t)(accum);
             }
-            scene->bcm_mapper(scene, pixelsO);
+            scene->bcm_mapper(scene, pixelsO, FALSE);
             frame_num = frame % scene->motion_blur_frames;
         }
         // skip motion blur ....
         else {
-            scene->bcm_mapper(scene, pixels);
+
+/*
+            RGBA pix = {
+                scene->image[((12*128*4)+12*4)],
+                scene->image[((12*128*4)+12*4)+1],
+                scene->image[((12*128*4)+12*4)+2],
+                scene->image[((12*128*4)+12*4)+3]
+            };
+            */
+            RGBA pix = {
+                pixels[((12*128*4)+12*4)],
+                pixels[((12*128*4)+12*4)+1],
+                pixels[((12*128*4)+12*4)+2],
+                pixels[((12*128*4)+12*4)+3]
+            };
+
+            pixels[((12*128*4)+12*4)] = 200;
+            pixels[((12*128*4)+12*4)+1] = 200;
+            pixels[((12*128*4)+12*4)+2] = 200;
+            printf("pixel: %d %d %d %d\n", pix.r, pix.g, pix.b, pix.a);
+            scene->bcm_mapper(scene, pixels, FALSE);
         }
 
-        // calculate the current FPS and delay to achieve fram rate
+
+        // Get the end time for this frame
+        /*
+        clock_gettime(CLOCK_MONOTONIC, &end_time);
+
+        // Calculate the time taken for the frame
+        long frame_time = (end_time.tv_sec - start_time.tv_sec) * 1000000L +
+                          (end_time.tv_nsec - start_time.tv_nsec) / 1000L;
+
+        // Sleep for the remainder of the frame time to achieve 120 FPS
+        if (frame_time < frame_time_us) {
+            usleep(frame_time_us - frame_time);
+        } else {
+            //scene->fps--;
+            //printf("decrease fps: %d\n", scene->fps);
+        }
+        */
+
+        //long sleep = calculate_fps(frame_time_us - frame_time);
         calculate_fps(scene->fps);
+        // if we are too slow, decrease the fps
     }
 
 
