@@ -77,8 +77,8 @@ mapping function. These functions are designed to compress the upper and lower r
 Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
 your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
 
-Build & Install
----------------
+Build & Install - Raspbian Lite
+-------------------------------
 ``` bash
 sudo apt update
 sudo apt upgrade
