@@ -35,6 +35,7 @@ void* render_cpu(void *arg) {
     memset(img, 0, scene->width * scene->height * scene->stride);
 
     debug("rendering on CPU\n");
+    sleep(1);
     for(;;) {
         // darken every pixel in the image for each byte of R,G,B data
         if (1) {
