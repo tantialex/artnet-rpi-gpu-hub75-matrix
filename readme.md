@@ -1,5 +1,6 @@
 This library implements HUB75 protocol on the rpi5
 ==================================================
+Library for rendering advanced GPU graphics on HUB75 panels on rpi5. 9600Hz refresh for a single panel. Supports up to 6 chained panels on 3 ports for 18 panels, 384x192 pixels. 64bit BCM for 64 color levels, = 262144 colors. 255 levels of brightness control. GLSL shader support. many tone mappings and gamma correction combinations are possible for complete HDR control.
 
 This is loosely based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
@@ -169,6 +170,8 @@ and begin the process again.
 
 Library Operation:
 -----------------
+See the header files for function definitions.
+
 The library bit bangs the data out to the HUB75 panel at a steady 20Mhz. This is significantly faster on my scope than
 hzeller's implementation by up to 10x. The software forks a thread that pulls from the PWM data and continuously pulses 
 the rgb pins and the clock line. After each row, the Output Enable pin is driven high and the data is latched and the next
@@ -185,8 +188,8 @@ data is read from on another thread via the render_forever() method.
 
 The render_forever() method will run until scene->do_render is set to false.
 
-Example:
---------
+Example using your own drawing buffer:
+-------------------------------------
 ```c
 scene_info *scene = default_scene(argc, argv);
 // example scene->stride is 3 for 24bpp (3 bytes per pixel)
@@ -202,25 +205,51 @@ uint8_t blue = 64;
 imageRGB[((y*scene->width) +x *scene->stride)] = red;
 imageRGB[((y*scene->width) +x *scene->stride)+1] = green;
 imageRGB[((y*scene->width) +x *scene->stride)+2] = blue;
+
+scene->bcm_mapper(scene, imageRGB);
+
+calculate_fps(scene->fps);
 ```
 
 for convenience, you can use the set_pixel24 and set_pixel32 helpers to write image data similar to hzeller's library.
 these functions are inline versions of the above code.
 
 
-
+Minimul Program
+---------------
 ```c
-// need to call default_scene() first to correctly setup the global scene->width
-// extern int global_width;
-scene_info *scene = default_scene(argc, argv);
-int red = 255, green = 128, blue = 64;
-RGB color = {red, green, blue};
-hub_pixel(scene, 32, 16, color);
-hub_pixel(scene, 32, 16, color);
-hub_line(scene, 5, 5, 32, 32, color);
-hub_line_aa(scene, 5, 5, 32, 32, color); // anti aliased
-hub_triangle(scene, x1, y1, x2, y2, x3, y3, color);
-hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color); // anti aliased
+#include <pthread.h>
+#include <rpihub74/rpihub75.h>
+#include <rpihub74/util.h>
+#include <rpihub74/gpu.h>
+#include <rpihub74/pixels.h>
+
+void* render_loop(void *arg) {
+    // get the current scene info
+    scene_info *scene = (scene_info*)arg;
+    for (;;) {
+        int red = 255, green = 128, blue = 64;
+	RGB color = {red, green, blue};
+	hub_pixel(scene, 32, 16, color);
+	hub_pixel(scene, 32, 16, color);
+	hub_line(scene, 5, 5, 32, 32, color);
+	hub_line_aa(scene, 5, 5, 32, 32, color); // anti-aliased
+	//hub_triangle(scene, x1, y1, x2, y2, x3, y3, color);
+	//hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color); // anti-aliased
+	scene->bcm_mapper(scene, NULL);
+	calcualte_fps(scene->fps);
+    }
+}
+
+int main(int argc, char **argv) {
+	scene_info *scene = defaulint main(int argc, char **argv)
+	t_scene(argc, argv);
+	check_scene(scene);
+	pthread update_thread;
+	pthread_create(&update_thread, NULL, render_loop, scene);
+	render_forever(scene); // does not return
+}
+
 ```
 
 32bpp RGBA buffer support is useful when pulling data from OpenGL which will output 32bpp RGBA data.
