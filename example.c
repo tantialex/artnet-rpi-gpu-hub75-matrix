@@ -30,16 +30,11 @@ unsigned int ri(unsigned int max) {
 void* render_cpu(void *arg) {
     // get the current scene info
     scene_info *scene = (scene_info*)arg;
-    const int buffer_sz     = scene->width * scene->height * scene->stride;
-    uint32_t frame          = 0;
+    // allocate  memory for image data, we can also use the preallocated scene->image if that's easier
     uint8_t *img = malloc(scene->width * scene->height * scene->stride);
-
-    uint16_t w = scene->width;
-    uint16_t h = scene->height;
     memset(img, 0, scene->width * scene->height * scene->stride);
 
     debug("rendering on CPU\n");
-
     for(;;) {
         // darken every pixel in the image for each byte of R,G,B data
         if (1) {
@@ -72,12 +67,10 @@ void* render_cpu(void *arg) {
         //hub_circle(scene, x1, y1, y3 % 20, color);
 
         // render the RGB data to the active BCM buffers.
-        // third option true will deplay to achieve scene->fps frames per second
         scene->bcm_mapper(scene, NULL);
 
         // calcualte_fps will delay execution to achieve the desired frames per second
         calculate_fps(scene->fps);
-        frame++;
     }
 }
 

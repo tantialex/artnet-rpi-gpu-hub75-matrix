@@ -136,38 +136,74 @@
 #define PRE_TIME struct timeval start, end; gettimeofday(&start, NULL);
 #define POST_TIME gettimeofday(&end, NULL); long elapsed_time = (end.tv_sec - start.tv_sec) * 1000000L + (end.tv_usec - start.tv_usec); printf("microseconds (1/1000 ms): %ld\n", elapsed_time);
 
-/**
- * pin assignments
- */
-#define ADDRESS_P0_G1 27
-#define ADDRESS_P0_G2 9
-#define ADDRESS_P0_B1 7
-#define ADDRESS_P0_B2 10
-#define ADDRESS_P0_R1 11
-#define ADDRESS_P0_R2 8
 
-#define ADDRESS_P1_G1 5
-#define ADDRESS_P1_G2 13
-#define ADDRESS_P1_B1 6
-#define ADDRESS_P1_B2 20
-#define ADDRESS_P1_R1 12
-#define ADDRESS_P1_R2 19
+#ifdef ADA_HAT
 
-#define ADDRESS_P2_R1 14
-#define ADDRESS_P2_R2 26
-#define ADDRESS_P2_G1 2
-#define ADDRESS_P2_G2 16
-#define ADDRESS_P2_B1 3
-#define ADDRESS_P2_B2 21
+    #define ADDRESS_P0_G1 13
+    #define ADDRESS_P0_G2 16
+    #define ADDRESS_P0_B1 6
+    #define ADDRESS_P0_B2 23 
+    #define ADDRESS_P0_R1 5
+    #define ADDRESS_P0_R2 12
 
-#define ADDRESS_A 22
-#define ADDRESS_B 23
-#define ADDRESS_C 24
-#define ADDRESS_D 25
-#define ADDRESS_E 15
-#define ADDRESS_STROBE 4
-#define ADDRESS_CLK 17
-#define ADDRESS_OE 18
+    #define ADDRESS_P1_G1 0
+    #define ADDRESS_P1_G2 0
+    #define ADDRESS_P1_B1 0
+    #define ADDRESS_P1_B2 0 
+    #define ADDRESS_P1_R1 0
+    #define ADDRESS_P1_R2 0
+
+    #define ADDRESS_P2_G1 0
+    #define ADDRESS_P2_G2 0
+    #define ADDRESS_P2_B1 0
+    #define ADDRESS_P2_B2 0 
+    #define ADDRESS_P2_R1 0
+    #define ADDRESS_P2_R2 0
+
+    #define ADDRESS_A 23
+    #define ADDRESS_B 26
+    #define ADDRESS_C 27
+    #define ADDRESS_D 20
+    #define ADDRESS_E 24
+    #define ADDRESS_STROBE 21
+    #define ADDRESS_CLK 17
+    #define ADDRESS_OE 4
+
+#else
+    /**
+     * standard pin assignments
+     */
+    #define ADDRESS_P0_G1 27
+    #define ADDRESS_P0_G2 9
+    #define ADDRESS_P0_B1 7
+    #define ADDRESS_P0_B2 10
+    #define ADDRESS_P0_R1 11
+    #define ADDRESS_P0_R2 8
+
+    #define ADDRESS_P1_G1 5
+    #define ADDRESS_P1_G2 13
+    #define ADDRESS_P1_B1 6
+    #define ADDRESS_P1_B2 20
+    #define ADDRESS_P1_R1 12
+    #define ADDRESS_P1_R2 19
+
+    #define ADDRESS_P2_R1 14
+    #define ADDRESS_P2_R2 26
+    #define ADDRESS_P2_G1 2
+    #define ADDRESS_P2_G2 16
+    #define ADDRESS_P2_B1 3
+    #define ADDRESS_P2_B2 21
+
+    #define ADDRESS_A 22
+    #define ADDRESS_B 23
+    #define ADDRESS_C 24
+    #define ADDRESS_D 25
+    #define ADDRESS_E 15
+    #define ADDRESS_STROBE 4
+    #define ADDRESS_CLK 17
+    #define ADDRESS_OE 18
+
+#endif
 
 // control pins bit masks
 #define PIN_OE (1 << ADDRESS_OE)

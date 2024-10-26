@@ -43,6 +43,7 @@ const char *shadertoy_header =
     "uniform vec3 iChannelResolution[4];\n"
     "uniform float iChannelTime[4];\n"
     "uniform sampler2D iChannel0;\n"
+    "uniform sampler2D iChannel1;\n"
     "uniform float iTime;\n"
 
     "out vec4 fragColor;\n"
@@ -176,6 +177,48 @@ static GLuint create_shadertoy_program(char *file) {
 
 
 /**
+ * @brief return a new string with the extension changed to new_extension
+ * 
+ * @param filename 
+ * @param new_extension 
+ * @return char* 
+ */
+char *change_file_extension(const char *filename, const char *new_extension) {
+    // Find the last dot in the filename
+    const char *dot = strrchr(filename, '.');
+    size_t new_filename_length;
+
+    // If there is no dot, simply append the new extension
+    if (dot == NULL) {
+        new_filename_length = strlen(filename) + strlen(new_extension) + 2; // +2 for dot and null terminator
+    } else {
+        new_filename_length = (dot - filename) + strlen(new_extension) + 2; // +2 for dot and null terminator
+    }
+
+    // Allocate memory for the new filename
+    char *new_filename = (char *)malloc(new_filename_length);
+    if (new_filename == NULL) {
+        perror("Unable to allocate memory");
+        return NULL;
+    }
+
+    // Copy the original filename up to the dot, if it exists
+    if (dot == NULL) {
+        strcpy(new_filename, filename);
+    } else {
+        strncpy(new_filename, filename, dot - filename);
+        new_filename[dot - filename] = '\0'; // Null-terminate the string
+    }
+
+    // Append the new extension
+    strcat(new_filename, ".");
+    strcat(new_filename, new_extension);
+
+    return new_filename;
+}
+
+
+/**
  * @brief render the shadertoy compatible shader source code in the 
  * file pointed to at scene->shader_file
  * 
@@ -275,6 +318,7 @@ void *render_shader(void *arg) {
     GLint frameLocation = glGetUniformLocation(program, "iFrame");
     GLint resLocation = glGetUniformLocation(program, "iResolution");
     GLint chan0Location = glGetUniformLocation(program, "iChannel0");
+    GLint chan1Location = glGetUniformLocation(program, "iChannel1");
     
 
 
@@ -297,10 +341,25 @@ void *render_shader(void *arg) {
         motion_blur[i] /= sum;
     }
 
-    GLuint texture = load_texture("assets/noise_medium.png");
-    if (texture == 0) {
-        die("unable to load texture 'assets/noise_meidum.png'\n");
+
+    GLuint texture0 = 0, texture1 = 0;
+    char *chan0 = change_file_extension(scene->shader_file, "channel0");
+    if (access(chan0, R_OK)) {
+        texture0 = load_texture(chan0);
+        if (texture0 == 0) {
+            die("unable to load texture '%s'\n", chan0);
+        }
     }
+
+    char *chan1 = change_file_extension(scene->shader_file, "channel1");
+    if (access(chan1, R_OK)) {
+        texture1 = load_texture(chan1);
+        if (texture1 == 0) {
+            die("unable to load texture '%s'\n", chan1);
+        }
+    }
+
+
 
 
     //printf("GLSL shader compiled. rendering...\n");
@@ -311,12 +370,20 @@ void *render_shader(void *arg) {
         // clock_gettime(CLOCK_MONOTONIC, &start_time);
         glUseProgram(program);
 
-        glActiveTexture(GL_TEXTURE0);
-        glBindTexture(GL_TEXTURE_2D, texture);
+        if (texture0) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture0);
+
+            if (texture1) {
+                glActiveTexture(GL_TEXTURE0);
+                glBindTexture(GL_TEXTURE_2D, texture1);
+            }
+        }
 
         glUniform1f(timeLocation, time);
         glUniform1f(frameLocation, frame);
         glUniform1i(chan0Location, 0);
+        glUniform1i(chan1Location, 1);
         glUniform3f(resLocation, scene->width, (scene->height), 0);
 
         // Render
