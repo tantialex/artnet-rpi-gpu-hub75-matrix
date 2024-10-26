@@ -79,6 +79,8 @@ uint32_t row_to_address(const int y, uint8_t half_height) {
  * @param scene 
  */
 void check_scene(const scene_info *scene) {
+    printf("ports: %d, chains: %d, width: %d, height: %d, stride: %d, bit_depth: %d\n", 
+        scene->num_ports, scene->num_chains, scene->width, scene->height, scene->stride, scene->bit_depth);
     if (scene->num_ports > 3) {
         die("Only 3 port supported at this time\n");
     }
@@ -292,12 +294,17 @@ void render_forever(const scene_info *scene) {
 
 
 
+    time_t last_time_s     = time(NULL);
+    uint32_t frame_count   = 0;
+
     // uint8_t bright = scene->brightness;
     while(scene->do_render) {
 
         // iterate over the bit plane
         //PRE_TIME;
         for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
+            time_t current_time_s = time(NULL);
+            frame_count++;
             // for the current bit plane, render the entire frame
             uint32_t offset = pwm;
             for (uint16_t y=0; y<half_height; y++) {
@@ -334,6 +341,15 @@ void render_forever(const scene_info *scene) {
             if (UNLIKELY(scene->bcm_ptr != last_pointer)) {
                 last_pointer = scene->bcm_ptr;
                 bcm_signal = (last_pointer) ? scene->bcm_signalB : scene->bcm_signalA;
+            }
+
+            if (UNLIKELY(current_time_s >= last_time_s + 5)) {
+
+                if (scene->show_fps) {
+                    printf("Panel Refresh Rate: %dHz\n", frame_count / 5);
+                }
+                frame_count = 0;
+                last_time_s = current_time_s;
             }
         }
 

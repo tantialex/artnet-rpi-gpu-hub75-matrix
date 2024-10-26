@@ -883,13 +883,17 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
     // tone map the bits for the current scene, update if the lookup table if scene tone mapping changes....
     static void *bits = NULL;
     static float *quant_errors = NULL;
-    static float *error_map = NULL;
+    static float *dither_map = NULL;
     static func_tone_mapper_t last_tone_map = NULL;
 
     if (UNLIKELY(bits == NULL || last_tone_map != scene->tone_mapper)) {
         if (quant_errors == NULL) {
             quant_errors = (float*)malloc(768 * sizeof(float));
-            error_map = (float*)malloc(scene->width * scene->height * scene->stride * sizeof(float));
+            dither_map = (float*)malloc(scene->width * scene->height * scene->stride * sizeof(float));
+
+            for (int i=0; i<scene->width * scene->height * scene->stride; i++) {
+                dither_map[i] = ((rand() / (float)RAND_MAX) - (rand() / (float)RAND_MAX)) * scene->dither;
+            }
         }
         if (bits != NULL) { // don't leak memory!
             free(bits);
@@ -949,83 +953,23 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
     const uint16_t row_stride = width * stride;
 
 
-    if (scene->dither > 0) {
-    // perform dithering
-    memset(error_map, 0, scene->width * scene->height * scene->stride * sizeof(float));
-    RGBF max_p;
-    for (uint16_t y=0; y < 64; y++) {
-        image_ptr         = base_ptr + y * row_stride;
-        float *error_ptr  = error_map + y * row_stride;
-        for (uint16_t x=1; x < 127; x++) {
+    if (scene->dither > 0.1f) {
+        float *dither_ptr = dither_map;
+        const uint16_t width = scene->width;
+        const uint16_t height = scene->height;
+        for (uint16_t y=0; y < height; y++) {
+            image_ptr         = base_ptr + y * row_stride;
+            for (uint16_t x=0; x < width; x++) {
 
-            // TODO: we are just removing the gamma correction by dithering this.
-            // pixel is the current pixel + gamma quantization error
-            RGBF pixel = {
-                //clampf(image_ptr[0] + quant_errors[image_ptr[0]] + error_ptr[0], 0.0f, 255.0f),
-                //clampf(image_ptr[1] + quant_errors[image_ptr[1]+256] + error_ptr[1], 0.0f, 255.0f),
-                //clampf(image_ptr[2] + quant_errors[image_ptr[2]+512] + error_ptr[2], 0.0f, 255.0f)
-                image_ptr[0] + error_ptr[0],
-                image_ptr[1] + error_ptr[1],
-                image_ptr[2] + error_ptr[2]
-            };
+                // update this pixel with the dither error corrected value
+                image_ptr[0] = (uint8_t)clampf(image_ptr[0] + dither_ptr[0], 0.0f, 255.f);
+                image_ptr[1] = (uint8_t)clampf(image_ptr[1] + dither_ptr[1], 0.0f, 255.f);
+                image_ptr[2] = (uint8_t)clampf(image_ptr[2] + dither_ptr[2], 0.0f, 255.f);
 
-                /*
-            RGB quant_pixel = {
-
-                (uint8_t)saturated_add_unsigned8(image_ptr[0], (uint8_t)quant_errors[image_ptr[0]]),
-                (uint8_t)saturated_add_unsigned8(image_ptr[1], (uint8_t)quant_errors[image_ptr[1]+256]),
-                (uint8_t)saturated_add_unsigned8(image_ptr[2], (uint8_t)quant_errors[image_ptr[2]+512])
-            };
-
-            RGBF error_pixel = {
-                image_ptr[0] - quant_pixel.r,
-                image_ptr[1] - quant_pixel.g,
-                image_ptr[2] - quant_pixel.b
-            };
-                */
-
-            max_p.r = MAX(max_p.r, quant_errors[image_ptr[0]]);
-            max_p.g = MAX(max_p.g, quant_errors[image_ptr[1]]);
-            max_p.b = MAX(max_p.b, quant_errors[image_ptr[2]]);
-
-            RGBF error_pixel = {
-                quant_errors[image_ptr[0]],
-                quant_errors[image_ptr[1]],
-                quant_errors[image_ptr[2]],
-            };
-            // update this pixel with the dither error corrected value
-            image_ptr[0] = (uint8_t)clampf(pixel.r, 0.0f, 255.f);
-            image_ptr[1] = (uint8_t)clampf(pixel.g, 0.0f, 255.f);
-            image_ptr[2] = (uint8_t)clampf(pixel.b, 0.0f, 255.f);
-
-
-            // update the dither map....
-            // dither into the next pixel right
-            error_ptr[0+stride] += error_pixel.r * 7.0f / 16.0f;
-            error_ptr[1+stride] += error_pixel.g * 7.0f / 16.0f;
-            error_ptr[2+stride] += error_pixel.b * 7.0f / 16.0f;
-
-            // dither down into the next pixel left
-            error_ptr[0+row_stride-stride] += error_pixel.r * 3.0f / 16.0f;
-            error_ptr[1+row_stride-stride] += error_pixel.g * 3.0f / 16.0f;
-            error_ptr[2+row_stride-stride] += error_pixel.b * 3.0f / 16.0f;
-
-            // dither down into the next on point
-            error_ptr[0+row_stride] += error_pixel.r * 5.0f / 16.0f;
-            error_ptr[1+row_stride] += error_pixel.g * 5.0f / 16.0f;
-            error_ptr[2+row_stride] += error_pixel.b * 3.0f / 16.0f;
-
-            // dither down into the next right
-            error_ptr[0+row_stride+stride] += error_pixel.r * 1.0f / 16.0f;
-            error_ptr[1+row_stride+stride] += error_pixel.g * 1.0f / 16.0f;
-            error_ptr[2+row_stride+stride] += error_pixel.b * 1.0f / 16.0f;
-
-            image_ptr += stride;
-            error_ptr += stride;
+                image_ptr += stride;
+                dither_ptr += stride;
+            }
         }
-    }
-
-    //printf("dithered! R:%f, G:%f, B:%f\n", (double)max_p.r, (double)max_p.g, (double)max_p.b);
     }
 
     image_ptr = (image == NULL) ? scene->image : image;

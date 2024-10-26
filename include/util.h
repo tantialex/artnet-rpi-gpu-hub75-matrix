@@ -112,7 +112,7 @@ int rnd(unsigned char *buffer, const size_t size);
  * @param target_fps - target a sleep time to achieve this fps
  * @return long - returns sleep time in microseconds
  */
-long calculate_fps(const uint16_t target_fps);
+long calculate_fps(const uint16_t target_fps, const bool show_fps);
 
 /**
  * @brief map the gpio pins to memory

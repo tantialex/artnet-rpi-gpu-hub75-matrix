@@ -233,7 +233,7 @@ uint32_t *create_jitter_mask(const uint16_t jitter_size, const uint8_t brightnes
  * @param target_fps - target a sleep time to achieve this fps
  * @return long - returns sleep time in microseconds
  */
-long calculate_fps(const uint16_t target_fps) {
+long calculate_fps(const uint16_t target_fps, const bool show_fps) {
     // Variables to track FPS
     static unsigned int frame_count = 0;
     static time_t       last_time_s = 0;
@@ -261,7 +261,9 @@ long calculate_fps(const uint16_t target_fps) {
     // If one second has passed
     if (current_time_s != last_time_s) {
         // Output FPS
-        debug("FPS: %d, micro second sleep: %ld\n", frame_count, sleep_time);
+        if (show_fps) {
+            printf("FPS: %d, micro second sleep per frame: %ld\n", frame_count, sleep_time);
+        }
 
         // Reset frame count and update last_time
         frame_count = 0;
@@ -281,6 +283,7 @@ long calculate_fps(const uint16_t target_fps) {
  */
 uint32_t* map_gpio(uint32_t offset) {
 
+    asm volatile ("" : : : "memory");  // Prevents optimization
     int mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
     uint32_t *map = (uint32_t *)mmap(
         NULL,
@@ -296,6 +299,7 @@ uint32_t* map_gpio(uint32_t offset) {
     }
     close(mem_fd);
 
+    printf("gpio mapped\n");
     return map;
 }
 
@@ -325,11 +329,18 @@ void configure_gpio(uint32_t *PERIBase) {
     // https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html
 
     for (uint32_t pin_num=2; pin_num<28; pin_num++) {
+        asm volatile ("" : : : "memory");  // Prevents optimization
         uint32_t *PADBase  = PERIBase + PAD_OFFSET;
         uint32_t *pad = PADBase + 1;   
         uint32_t *GPIOBase = PERIBase + GPIO_OFFSET;
-	    GPIO[pin_num].ctrl = 5;
-	    pad[pin_num] = 0x15;
+        uint32_t *RIOBase = PERIBase + RIO_OFFSET;
+        GPIO[pin_num].ctrl = 5;
+        pad[pin_num] = 0x15;
+
+        rioSET->OE = 0x01<<pin_num;     // these 2 lines actually set the pin to output mode
+        rioSET->Out = 0x01<<pin_num;
+
+        printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
     }
 }
 
@@ -360,6 +371,7 @@ void usage(int argc, char **argv) {
         "     -j                adjust brightness in pixel BCM, not recommended\n"
         "     -z                run LED calibration script\n"
         "     -n                display data from UDP server on port %d\n"
+        "     -o                display current FPS and Panel refresh Hz\n"
         "     -h                this help\n", argv[0], SERVER_PORT);
 }
 
@@ -435,10 +447,11 @@ scene_info *default_scene(int argc, char **argv) {
     scene->brightness = 200;
     scene->motion_blur_frames = 0;
     scene->do_render = TRUE;
-    scene->dither = 0;
+    scene->dither = 0.0f;
 
-    // default to 120 fps
-    scene->fps = 120;
+    // default to 60 fps
+    scene->fps = 60;
+    scene->show_fps = FALSE;
 
     // print usage if no arguments
     if (argc < 2) { 
@@ -447,7 +460,7 @@ scene_info *default_scene(int argc, char **argv) {
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:m:b:t:l:i:jz?")) != -1) {
+    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:m:b:t:l:i:jzo?")) != -1) {
         switch (opt) {
         case 's':
             scene->shader_file = optarg;
@@ -490,17 +503,16 @@ scene_info *default_scene(int argc, char **argv) {
             scene->motion_blur_frames = atoi(optarg);
             break;
         case 'l':
-            //die('dither arg: %s %d\n', optarg, scene->dither);
-            // scene->dither = atoi(optarg);
-            //die('dither arg: %s %d\n', optarg, scene->dither);
-            int dither = atoi(optarg);
-            printf("DITHER!, %d\n", dither);
-            scene->dither = MAX(0, MIN(atoi(optarg), 255));
+            scene->dither = atof(optarg);
+            scene->dither = MIN(MAX(scene->dither, 0.0f), 10.0f);
         case 'j':
             scene->jitter_brightness = false;
             break;
         case 'z':
             scene->gamma = -99.0f;
+            break;
+        case 'o':
+            scene->show_fps = TRUE;
             break;
         case 't':
             char *lvl = get_nth_token(optarg, ':', 1);

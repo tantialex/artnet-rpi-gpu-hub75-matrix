@@ -30,16 +30,13 @@ unsigned int ri(unsigned int max) {
 void* render_cpu(void *arg) {
     // get the current scene info
     scene_info *scene = (scene_info*)arg;
-    const int buffer_sz     = scene->width * scene->height * scene->stride;
-    uint32_t frame          = 0;
+    // allocate  memory for image data, we can also use the preallocated scene->image if that's easier
     uint8_t *img = malloc(scene->width * scene->height * scene->stride);
-
-    uint16_t w = scene->width;
-    uint16_t h = scene->height;
     memset(img, 0, scene->width * scene->height * scene->stride);
 
     debug("rendering on CPU\n");
-
+    // need to pause a second for gpio to be setup
+    usleep(50000);
     for(;;) {
         // darken every pixel in the image for each byte of R,G,B data
         if (1) {
@@ -72,25 +69,27 @@ void* render_cpu(void *arg) {
         //hub_circle(scene, x1, y1, y3 % 20, color);
 
         // render the RGB data to the active BCM buffers.
-        // third option true will deplay to achieve scene->fps frames per second
         scene->bcm_mapper(scene, NULL);
 
         // calcualte_fps will delay execution to achieve the desired frames per second
-        calculate_fps(scene->fps);
-        frame++;
+        calculate_fps(scene->fps, scene->show_fps);
     }
 }
 
 
 int main(int argc, char **argv)
 {
+    printf("rpi-gpu-hub75 v0.2 example program %s pin out configuration\n", ADDRESS_TYPE);
     srand(time(NULL));
+
     // parse command line options to define the scene
     // use -h for help, see this function in util.c for more information on command line parsing
     scene_info *scene = default_scene(argc, argv);
 
     // ensure that the scene is valid
     check_scene(scene);
+
+    
     
     // create another thread to run the frame drawing function (GPU or CPU)
     pthread_t update_thread;
@@ -98,7 +97,7 @@ int main(int argc, char **argv)
     if (scene->shader_file == NULL) {
         pthread_create(&update_thread, NULL, render_cpu, scene);
     } else {
-        scene->stride = 4;
+        scene->stride = 4;    // glReadPixels() returns 4 byte RGBA pixels
         pthread_create(&update_thread, NULL, render_shader, scene);
     }
 
