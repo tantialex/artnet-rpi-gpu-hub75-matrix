@@ -451,7 +451,10 @@ scene_info *default_scene(int argc, char **argv) {
 
     // default to 60 fps
     scene->fps = 60;
+<<<<<<< HEAD
     scene->show_fps = FALSE;
+=======
+>>>>>>> 29cad8838ede1a34d19f34ce5f00a9e8e5bcd84e
 
     // print usage if no arguments
     if (argc < 2) { 

@@ -4,6 +4,7 @@ CC = gcc
 #CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Wdouble-promotion -Iinclude
 CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Iinclude
 LDFLAGS = -lpthread -lrt -lm -lc
+CFLAGS += $(DEF)
 
 # Directories
 PREFIX = /usr/local
@@ -31,7 +32,7 @@ GBM_FOUND := $(shell pkg-config --exists gbm && echo yes || echo no)
 EGL_FOUND := $(shell pkg-config --exists egl && echo yes || echo no)
 
 # Targets
-.PHONY: all clean install check-libs
+.PHONY: all clean install check-libs example
 
 # Default target to build both libraries
 all: check-libs $(LIB_NO_GPU) $(LIB_GPU)
@@ -64,6 +65,11 @@ $(LIB_NO_GPU): $(OBJ_COMMON) | $(BUILDDIR)
 $(LIB_GPU): $(OBJ_COMMON) $(OBJ_GPU) | $(BUILDDIR)
 	$(CC) $(CFLAGS) -shared -o $@ $(OBJ_COMMON) $(OBJ_GPU) $(LDFLAGS) `pkg-config --libs glesv2 gbm egl`
 
+# New example target to compile example.c
+example: example.c $(LIB_GPU)
+	$(CC) example.c -Wall -O3 -lrpihub75_gpu -o example
+
+
 # Install target
 install: all
 	# Create directories
@@ -82,7 +88,7 @@ install: all
 # Clean target
 clean:
 	rm -rf $(BUILDDIR)
-	rm -f $(OBJ_COMMON) $(OBJ_GPU) $(LIB_NO_GPU) $(LIB_GPU)
+	rm -f $(OBJ_COMMON) $(OBJ_GPU) $(LIB_NO_GPU) $(LIB_GPU) example
 
 
 
