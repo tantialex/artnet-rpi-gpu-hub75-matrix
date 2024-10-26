@@ -298,7 +298,7 @@ buffer as often as you like. The data will be overwritten and the new PWM data w
 to draw to the display at up to 9600Hz (depending on the number of chained displays) however frame rates of about 120fps seem 
 to produce excellent results and higher frame rates have diminishing returns after that.
 
-Because we are have a 9600-2400Hz refresh rate we are able to use up to 64bit PWM cycles. That means that each RGB value
+Because we have a 9600-2400Hz refresh rate we can use up to 64bit PWM cycles. That means that each RGB value
 can have 64 levels of brightness or 64*64*64 = 262144 colors. In practice though, values at the lower end (more bits off
 than on) have a much more perceptible effect on brightness than values at the higher end (more on than off). This is because
 the human eye is much more sensitive to brightness changes at darker levels than at brighter levels. To correct this I have
@@ -308,7 +308,7 @@ added gamma correction. See color calibration further in this document for detai
 brightness is controlled via a 9K "jitter mask". 9K of random bytes are generated and if each random value is > brightness
 level (uint8_t) the OE pin is toggled for the mask. when OE is toggled high, the display is toggled off. By applying this 
 mask for every pixel, we are able to output our normal BCM color data and toggle the brightness value on or off randomly
-averaging out to the current brightness level. This provides for very fine tuned brightness control (255 levels) while
+averaging out to the current brightness level. This provides fine-tuned brightness control (255 levels) while
 maintaining excellent color balance.
 
 Alternatively, you can encode brightness data directly into the PWM data, however, this yields very poor results for low
@@ -505,13 +505,13 @@ pwm_mapping function for the scene. (see func_bcm_mapper_t)
      -d <bit depth>    bit depth                (2-32)
      -b <brightness>   overall brightness level (0-255)
      -m <frames>       motion blur frames       (0-32)
-     -l <dither>       dither strength, 0 = off (0-255)
-     -i <mapper>       image mapper (mirror, flip, mirror_flip)
-     // both sigmoid and saturation tone mappers accept a level ie: saturation:2.0
+     -l <dither>       dither strength, 0 = off (0.0-10.0)
+     -i <mapper>       image mapper (mirror, flip, mirror_flip) (need support for U and V mapping)
+      // both sigmoid and saturation tone mappers accept a level ie: saturation:2.0
      -t <tone_mapper>  (aces, reinhard, none, saturation:0.5-5.0, sigmoid:0.5-2.0, hable)
      -j                adjust brightness in BCM data, not recommended
      -z                run LED calibration script
-     -n                display data from UDP server on port 22222
+     -o                display FPS counters and panel refresh rate in Hz
 ```
 
 
@@ -535,18 +535,18 @@ data to 1 pixel as a single byte. This would allow us to send a single frame of 
 per rp2040. This data can be sent at 16Mhz. This could allow us to send SPI data to up to 6 rp2040 chips at 16Mhz each
 and 60fps with 8 panels on each rp2040.
 
-The frame data would have a 256 entry 32bcm pallette for a total of 1024 bytes at the beginning on the frame describing
-the 256 colors in the frame's pallette. each pixel could then be sent as a single byte as a lookup to the pallette color.
+The frame data would have a 256 entry 32bcm palette for a total of 1024 bytes at the beginning on the frame describing
+the 256 colors in the frame's palette. each pixel could then be sent as a single byte as a lookup to the pallette color.
 This would allow us to send data 3x faster to the rp2040 chips.
 
 Once frame data was loaded on the rp2040 chip. pio would use a lookup table from raw frame bytes to bcm data and shift out
 to the 6 color registers on the current BCM cycle. This data format would allow us to store a huge amount of image data in
-the rp2040 256KB sRAM which still maintaining good color response and excellent refresh rates. This method would also allow
+the rp2040 256KB sRAM which still maintains good color response and excellent refresh rates. This method would also allow
 us to shift in data faster than the pi5 20Mhz upper limit on GPIO and clock data in at the limit of the HUB75 panels (32-40Mhz)
 
 So far I have only been working on the math to see if this makes any sense. Since it seems possible I might make a rp2040 
 implementation and see if 50Mhz bandwidth is achievable over grounded cat5e. After that, programming the PIO to perform the
-BCM pallete lookup and shit out the data at 20Mhz+ will be the final test to see if this is a viable method of controlling
+BCM palette lookup and shit out the data at 20Mhz+ will be the final test to see if this is a viable method of controlling
 additional panels at a high refresh rate.
 
 Compiler Flags
@@ -555,7 +555,7 @@ Compiler Flags
 * -ffast-math reduces some precision but improves performance for some cases.
 * -mtune=native will compile for your CPU optomizations.
 * -Wdouble-promotion can help identify a lot of places where you are actually using double precision (64 bit) not single precision (float)
-   obviously 64bit floats are at least 2x slower than single precision.
+   obviously, 64bit floats are at least 2x slower than single precision.
 * -fopt-info-vec will show you loops the compiler was able to vectorize for you (SIMD, AVX, SSE, ETC)
 
 
@@ -564,6 +564,6 @@ investigation:
 blue noise dithering
 
 
-From a new raspibian lite system. install rpi-gpu-hub75-matrix and linux realtime kernel for
+From a new raspibian lite system. install rpi-gpu-hub75-matrix and Linux realtime kernel for
 silky smooth hub75 panels
 
