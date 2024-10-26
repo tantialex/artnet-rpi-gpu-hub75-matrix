@@ -88,7 +88,7 @@ install: all
 # Clean target
 clean:
 	rm -rf $(BUILDDIR)
-	rm -f $(OBJ_COMMON) $(OBJ_GPU) $(LIB_NO_GPU) $(LIB_GPU)
+	rm -f $(OBJ_COMMON) $(OBJ_GPU) $(LIB_NO_GPU) $(LIB_GPU) example
 
 
 

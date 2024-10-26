@@ -281,6 +281,7 @@ long calculate_fps(const uint16_t target_fps) {
  */
 uint32_t* map_gpio(uint32_t offset) {
 
+    asm volatile ("" : : : "memory");  // Prevents optimization
     int mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
     uint32_t *map = (uint32_t *)mmap(
         NULL,
@@ -296,6 +297,7 @@ uint32_t* map_gpio(uint32_t offset) {
     }
     close(mem_fd);
 
+    printf("gpio mapped\n");
     return map;
 }
 
@@ -325,11 +327,13 @@ void configure_gpio(uint32_t *PERIBase) {
     // https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html
 
     for (uint32_t pin_num=2; pin_num<28; pin_num++) {
+        asm volatile ("" : : : "memory");  // Prevents optimization
         uint32_t *PADBase  = PERIBase + PAD_OFFSET;
         uint32_t *pad = PADBase + 1;   
         uint32_t *GPIOBase = PERIBase + GPIO_OFFSET;
 	    GPIO[pin_num].ctrl = 5;
 	    pad[pin_num] = 0x15;
+        printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
     }
 }
 
@@ -435,10 +439,10 @@ scene_info *default_scene(int argc, char **argv) {
     scene->brightness = 200;
     scene->motion_blur_frames = 0;
     scene->do_render = TRUE;
-    scene->dither = 0;
+    scene->dither = 0.0f;
 
-    // default to 120 fps
-    scene->fps = 120;
+    // default to 60 fps
+    scene->fps = 60;
 
     // print usage if no arguments
     if (argc < 2) { 
@@ -490,12 +494,8 @@ scene_info *default_scene(int argc, char **argv) {
             scene->motion_blur_frames = atoi(optarg);
             break;
         case 'l':
-            //die('dither arg: %s %d\n', optarg, scene->dither);
-            // scene->dither = atoi(optarg);
-            //die('dither arg: %s %d\n', optarg, scene->dither);
-            int dither = atoi(optarg);
-            printf("DITHER!, %d\n", dither);
-            scene->dither = MAX(0, MIN(atoi(optarg), 255));
+            scene->dither = atof(optarg);
+            scene->dither = MIN(MAX(scene->dither, 0.0f), 10.0f);
         case 'j':
             scene->jitter_brightness = false;
             break;

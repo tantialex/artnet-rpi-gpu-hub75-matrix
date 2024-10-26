@@ -344,7 +344,8 @@ void *render_shader(void *arg) {
 
     GLuint texture0 = 0, texture1 = 0;
     char *chan0 = change_file_extension(scene->shader_file, "channel0");
-    if (access(chan0, R_OK)) {
+    if (access(chan0, R_OK) == 0) {
+        printf("loading texture %s\n", chan0);
         texture0 = load_texture(chan0);
         if (texture0 == 0) {
             die("unable to load texture '%s'\n", chan0);
@@ -352,7 +353,7 @@ void *render_shader(void *arg) {
     }
 
     char *chan1 = change_file_extension(scene->shader_file, "channel1");
-    if (access(chan1, R_OK)) {
+    if (access(chan1, R_OK) == 0) {
         texture1 = load_texture(chan1);
         if (texture1 == 0) {
             die("unable to load texture '%s'\n", chan1);

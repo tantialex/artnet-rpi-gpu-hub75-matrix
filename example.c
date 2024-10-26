@@ -77,6 +77,7 @@ void* render_cpu(void *arg) {
 
 int main(int argc, char **argv)
 {
+    printf("rpi-gpu-hub75 v0.2 example program %s pin out configuration\n", ADDRESS_TYPE);
     srand(time(NULL));
     // parse command line options to define the scene
     // use -h for help, see this function in util.c for more information on command line parsing
@@ -85,12 +86,14 @@ int main(int argc, char **argv)
     // ensure that the scene is valid
     check_scene(scene);
     
+    
     // create another thread to run the frame drawing function (GPU or CPU)
     pthread_t update_thread;
     // use the gpu shader renderer if we have one, else use the cpu renderer above
     if (scene->shader_file == NULL) {
         pthread_create(&update_thread, NULL, render_cpu, scene);
     } else {
+        printf("render shader [%s]", scene->shader_file);
         scene->stride = 4;
         pthread_create(&update_thread, NULL, render_shader, scene);
     }

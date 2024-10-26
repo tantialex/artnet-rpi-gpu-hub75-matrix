@@ -139,6 +139,8 @@
 
 #ifdef ADA_HAT
 
+    #define ADDRESS_TYPE "ADAFRUIT_HAT"
+
     #define ADDRESS_P0_G1 13
     #define ADDRESS_P0_G2 16
     #define ADDRESS_P0_B1 6
@@ -170,6 +172,8 @@
     #define ADDRESS_OE 4
 
 #else
+
+    #define ADDRESS_TYPE "HZELLER_HAT"
     /**
      * standard pin assignments
      */
@@ -335,7 +339,7 @@ typedef struct scene_info {
     /** @brief brightness level (0-255) */
     uint8_t brightness;
     /** @brief dithering strength. (0-10) 0 is off, improves simulated color in dark areas but reduces image sharpness */
-    uint8_t dither;
+    float dither;
 
     /** 
      * @brief number of panels connected to each chain on the port (1-8)
