@@ -5,9 +5,9 @@ This is loosely based on the work done by hzeller adding HUB75 support to RPI (w
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
 for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
 
-![Shader Demo 1]([https://www.example.com/image.jpg](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_1.jpg)
+![Shader Demo 1](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_1.jpg)
 
-![Shader Demo 2](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_2.jpg)[Download Video](path/to/video.mp4)
+![Shader Demo 2](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_2.jpg)
 
 ![Demo Video - Happy Jump](https://raw.github.com/bitslip6/rpi-gpu-hub75-matrix/raw/refs/heads/main/assets/happy_jump.mp4)
 
