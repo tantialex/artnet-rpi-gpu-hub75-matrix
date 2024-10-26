@@ -63,24 +63,31 @@ active 3 port boards to ensure proper level translation and to map the address l
 
 Glossary
 --------
-###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles. PWM is sometimes used in place of BCM in this document.
+### PWM 
+modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles. PWM is sometimes used in place of BCM in this document.
 
-###BCM modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
+### BCM 
+modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
 
-###Gamma mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
+### Gamma
+mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
 are spread out so that the color values ramp exponentially. This more closely matches human eye perception but does
 remove dynamic range at the low end of the spectrum producing image quantization in darker regions.
 
-###Dithering When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
+### Dithering 
+When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
 
-###Tone Mapping Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
+###Tone Mapping
+Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
 mapping function. These functions are designed to compress the upper and lower regions of an image to preserve High Dynamic
 Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
 your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
 
-###GLSL (OpenGL Shading Languate) GLSL is a high-level shading language based on the C programming language, designed for programming shaders in OpenGL API. It allows custom vertex, fragment and compute shaders to control rendering pipeline of 3D graphics applications, enabling effects such as lighting, texture mapping, and other visual effects.
+###GLSL 
+(OpenGL Shading Languate) GLSL is a high-level shading language based on the C programming language, designed for programming shaders in OpenGL API. It allows custom vertex, fragment and compute shaders to control rendering pipeline of 3D graphics applications, enabling effects such as lighting, texture mapping, and other visual effects.
 
-###SDF (Sine Distance Field): a function that defines a shape in 3d space. The function produces outputs such that points outside the object are positive values, the surface of the shape is at point 0 and points inside the shape are negative.
+###SDF 
+(Sine Distance Field): a function that defines a shape in 3d space. The function produces outputs such that points outside the object are positive values, the surface of the shape is at point 0 and points inside the shape are negative.
 
 Build & Install - Raspbian Lite
 -------------------------------
