@@ -5,28 +5,17 @@ This is loosely based on the work done by hzeller adding HUB75 support to RPI (w
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
 for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
 
+shaders/cyber.glsl
+------------------
 ![Shader Demo 1](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_1.jpg)
 
+shaders/cartoon.glsl
+--------------------
 ![Shader Demo 2](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_2.jpg)
 
+shaders/happy_jump.glsl
+-----------------------
 ![Demo Video - Happy Jump](https://raw.github.com/bitslip6/rpi-gpu-hub75-matrix/raw/refs/heads/main/assets/happy_jump.mp4)
-
-Glossary
---------
-###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
-
-###BCM modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
-
-###Gamma mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
-are spread out so that the color values ramp exponentially. This more closely matches human eye perception but does
-remove dynamic range at the low end of the spectrum producing image quantization in darker regions.
-
-###Dithering When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
-
-###Tone Mapping Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
-mapping function. These functions are designed to compress the upper and lower regions of an image to preserve High Dynamic
-Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
-your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
 
 
 
@@ -69,6 +58,94 @@ and send a PR with the correct offsets for ZERO, PI3, and PI4.
 Please read HZeller's excellent write-up on wiring the PI to the HUB75 display.  I highly recommend using one of his
 active 3 port boards to ensure proper level translation and to map the address lines, OE, and clock pins to all 3 boards
 
+
+
+Glossary
+--------
+###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
+
+###BCM modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
+
+###Gamma mapping linear color space to a compressed color space where colors in the lower band (say 0-64 for 8bit RGB)
+are spread out so that the color values ramp exponentially. This more closely matches human eye perception but does
+remove dynamic range at the low end of the spectrum producing image quantization in darker regions.
+
+###Dithering When you apply gamma correction, you compress the dynamic range of your RGB values, especially for dark colors. The colors that should have been represented by a smooth gradient are reduced to just a few distinct levels. Dithering helps by distributing the error introduced by this quantization process over neighboring pixels.
+
+###Tone Mapping Tone mapping takes normalized RGB data (0-1) and maps each RGB channel to a different value accoring to the
+mapping function. These functions are designed to compress the upper and lower regions of an image to preserve High Dynamic
+Range in a lower dynamic range format. Several are provided and they are easy to implement. Experiment with what works for
+your scene. Reference: https://www.cl.cam.ac.uk/teaching/2122/AGIP/07_HDR_and_tone_mapping_1pp.pdf
+
+Build & Install
+---------------
+``` bash
+sudo apt update
+sudo apt upgrade
+# build dependencies for rpi-gpu-hub75-matrix
+sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
+
+# for compiling the video player support (optional) (currently in devlopment)
+sudo apt install libavformat-dev libswscale-dev ffmpeg
+# you must reboot after installing ffmepg libraries to use opengl.
+# not sure why this is, but you should reboot after intalling the ffmpeg dependencies
+
+
+git clone https://github.com/bitslip6/rpi-gpu-hub75-matrix
+cd rpi-gpu-hub75-matrix
+# assumes you are using hzellers adaptive board or comaptible port mappings
+# edit include/rpihub75.h and edit teh #define for pin mapping if using a differnt board or pin configuration
+make
+sudo make install
+# compile the example program
+gcc example.c -Wall -O3 -mtune=native -lrpihub75_gpu  -o example
+
+# render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
+./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
+# render a IQ's "happy jumping" shader to 128x128 panel, bit depth 64, 2 ports, 2 panels, 60 fps, 
+# mirrored and flippeed, 255 brightness (100%), gamma 2.4, saturation tone mapping level 1.8
+./example -x 128 -y 128 -d 64 -p 2 -c 2 -f 60 -i mirror_flip -b 255 -g 2.4 -t saturation:1.8 -s shaders/happy_jump.glsl
+# render the triangle demo on the CPU, see example.c for basic library usage.
+./example -x 128 -y 128 -d 64 -f 60
+# render the lines gpu shader, 24 bit, with strong floyd steinberg dithering (-l 1-254), gamma 2.2
+./example -x 128 -y 128 -d 24 -f 60 -l 250 -g 2.2 -s shaders/lines.glsl
+# comming soon, mp4 drawing, network drawing, improved dithering
+``` 
+
+Compile RealTime Kernel
+-----------------------
+``` bash
+# for compiling the PREEMPT_RT kernel patch (optional)
+sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
+
+# real time kernel patch to remove any flicker:
+# compile real-time patch for rpi5 6.6 kernel
+# make sure these instructions are updated, visit https://raspberrypi.com/documentation/computers/linux_kernel.html#building
+
+mkdir kernel
+git clone --depth=1 --branch rpi-6.6.y https:/github.com/raspberrypi/linux
+wget https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-6.6.35-rt34.patch.gz
+cd linux
+zcat ../patch-6.6.35-rt34.patch.gz | patch -p1 --dry-run # make sure patch applies correctly
+zcat ../patch-6.6.35-rt34.patch.gz | patch -p1
+KERNEL=kernel_2712                                       # use kernel_8 for rpi1-4
+make bcm2712_defconfig                                   # use bcm2711_defconfig for rpi1-4 
+
+make menuconfig                                          # General -> Preemption Model -> select Real Time option
+vi .config                                               # custome CONFIG_LOCALVERSION (helps you identify your kernel when runing uname -a)
+make -j4 Image.gs modules dtbs
+# wait about 30-45 minutes
+echo $KERNEL
+sudo make -j4 modules_install
+sudo cp /boot/firmware/$KERNEL.img /boot/firmware/$KERNEL-backup.img
+sudo cp arch/arm64/boot/Image.gz /boot/firmware/$KERNEL.img
+sudo cp arch/arm64/boot/dts/broadcom/*.dtb /boot/firmware/
+sudo cp arch/arm64/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
+sudo cp arch/arm64/boot/dts/overlays/README /boot/firmware/overloays/
+sudo reboot
+```
+
+
 Hub75 Operation
 ---------------
 All documentation reefers to 64x64 panels. Your Mileage May Vary.
@@ -88,8 +165,8 @@ pin. data for one row is now latched. we advance the address row lines drop the 
 and begin the process again.
 
 
-Operation:
-----------
+Library Operation:
+-----------------
 The library bit bangs the data out to the HUB75 panel at a steady 20Mhz. This is significantly faster on my scope than
 hzeller's implementation by up to 10x. The software forks a thread that pulls from the PWM data and continuously pulses 
 the rgb pins and the clock line. After each row, the Output Enable pin is driven high and the data is latched and the next
@@ -119,6 +196,7 @@ uint8_t red = 255;
 uint8_t green = 128; 
 uint8_t blue = 64; 
 
+// scene->stride is 3
 imageRGB[((y*scene->width) +x *scene->stride)] = red;
 imageRGB[((y*scene->width) +x *scene->stride)+1] = green;
 imageRGB[((y*scene->width) +x *scene->stride)+2] = blue;
@@ -133,11 +211,14 @@ these functions are inline versions of the above code.
 // need to call default_scene() first to correctly setup the global scene->width
 // extern int global_width;
 scene_info *scene = default_scene(argc, argv);
-// write to a 24bpp RGB buffer (3 bytes per pixel)
-set_pixel24(imageRGB, 32, 16, 255, 128, 0);
-
-// write to a 32bpp RGB buffer (4 bytes per pixel, 4th byte alpha channel is ignored)
-set_pixel32(imageRGBA, 32, 16, 255, 128, 0);
+int red = 255, green = 128, blue = 64;
+RGB color = {red, green, blue};
+hub_pixel(scene, 32, 16, color);
+hub_pixel(scene, 32, 16, color);
+hub_line(scene, 5, 5, 32, 32, color);
+hub_line_aa(scene, 5, 5, 32, 32, color); // anti aliased
+hub_triangle(scene, x1, y1, x2, y2, x3, y3, color);
+hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color); // anti aliased
 ```
 
 32bpp RGBA buffer support is useful when pulling data from OpenGL which will output 32bpp RGBA data.
@@ -441,61 +522,3 @@ blue noise dithering
 From a new raspibian lite system. install rpi-gpu-hub75-matrix and linux realtime kernel for
 silky smooth hub75 panels
 
-``` bash
-sudo apt update
-sudo apt upgrade
-# build dependencies for rpi-gpu-hub75-matrix
-sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
-# for compiling the PREEMPT_RT kernel patch (optional)
-sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
-# for compiling the video player support (optional) (currently in devlopment)
-sudo apt install libavformat-dev libswscale-dev ffmpeg
-# you must reboot after installing ffmepg libraries to use opengl.
-# not sure why this is, but you should reboot after intalling the ffmpeg dependencies
-
-
-git clone https://github.com/bitslip6/rpi-gpu-hub75-matrix
-cd rpi-gpu-hub75-matrix
-# assumes you are using hzellers adaptive board or comaptible port mappings
-# edit include/rpihub75.h and edit teh #define for pin mapping if using a differnt board or pin configuration
-make
-sudo make install
-gcc example.c -O3 -lrpihub75_gpu -o example
-# render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
-./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
-# render a IQ's "happy jumping" shader to 128x128 panel, bit depth 64, 2 ports, 2 panels, 60 fps, 
-# mirrored and flippeed, 255 brightness (100%), gamma 2.4, saturation tone mapping level 1.8
-./example -x 128 -y 128 -d 64 -p 2 -c 2 -f 60 -i mirror_flip -b 255 -g 2.4 -t saturation:1.8 -s shaders/happy_jump.glsl
-# render the triangle demo on the CPU, see example.c for basic library usage.
-./example -x 128 -y 128 -d 64 -f 60
-# render the lines gpu shader, 24 bit, with strong floyd steinberg dithering (-l 1-254), gamma 2.2
-./example -x 128 -y 128 -d 24 -f 60 -l 250 -g 2.2 -s shaders/lines.glsl
-# comming soon, mp4 drawing, network drawing, improved dithering
-
-
-# real time kernel patch to remove any flicker:
-# compile real-time patch for rpi5 6.6 kernel
-# make sure these instructions are updated, visit https://raspberrypi.com/documentation/computers/linux_kernel.html#building
-
-mkdir kernel
-git clone --depth=1 --branch rpi-6.6.y https:/github.com/raspberrypi/linux
-wget https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-6.6.35-rt34.patch.gz
-cd linux
-zcat ../patch-6.6.35-rt34.patch.gz | patch -p1 --dry-run # make sure patch applies correctly
-zcat ../patch-6.6.35-rt34.patch.gz | patch -p1
-KERNEL=kernel_2712                                       # use kernel_8 for rpi1-4
-make bcm2712_defconfig                                   # use bcm2711_defconfig for rpi1-4 
-
-make menuconfig                                          # General -> Preemption Model -> select Real Time option
-vi .config                                               # custome CONFIG_LOCALVERSION (helps you identify your kernel when runing uname -a)
-make -j4 Image.gs modules dtbs
-# wait about 30-45 minutes
-echo $KERNEL
-sudo make -j4 modules_install
-sudo cp /boot/firmware/$KERNEL.img /boot/firmware/$KERNEL-backup.img
-sudo cp arch/arm64/boot/Image.gz /boot/firmware/$KERNEL.img
-sudo cp arch/arm64/boot/dts/broadcom/*.dtb /boot/firmware/
-sudo cp arch/arm64/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
-sudo cp arch/arm64/boot/dts/overlays/README /boot/firmware/overloays/
-sudo reboot
-```
