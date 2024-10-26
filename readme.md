@@ -100,6 +100,8 @@ sudo make install
 # compile the example program
 gcc example.c -Wall -O3 -mtune=native -lrpihub75_gpu  -o example
 
+# get command line help
+./example
 # render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
 ./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
 # render a IQ's "happy jumping" shader to 128x128 panel, bit depth 64, 2 ports, 2 panels, 60 fps, 
