@@ -63,7 +63,7 @@ active 3 port boards to ensure proper level translation and to map the address l
 
 Glossary
 --------
-###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles.
+###PWM modulates the pulse width of a signal (i.e., the "on" time vs "off" time) to control the average power delivered to a device, typically using fixed frequency and variable duty cycles. PWM is sometimes used in place of BCM in this document.
 
 ###BCM modulates the signal based on binary values. It uses a binary sequence, where each bit's on/off duration is proportional to its weight in the sequence. BCM is more efficient at low brightness levels than PWM, as it distributes "on" periods more evenly.
 
@@ -188,6 +188,44 @@ data is read from on another thread via the render_forever() method.
 
 The render_forever() method will run until scene->do_render is set to false.
 
+Minimum Program
+---------------
+```c
+#include <pthread.h>
+#include <rpihub74/rpihub75.h>
+#include <rpihub74/util.h>
+#include <rpihub74/gpu.h>
+#include <rpihub74/pixels.h>
+
+void* render_loop(void *arg) {
+    // get the current scene info
+    scene_info *scene = (scene_info*)arg;
+    for (;;) {
+        int red = 255, green = 128, blue = 64;
+	RGB color = {red, green, blue};
+	hub_pixel(scene, 32, 16, color);         // render to scene internal image buffer
+	hub_pixel(scene, 32, 16, color);
+	hub_line(scene, 5, 5, 32, 32, color);
+	hub_line_aa(scene, 5, 5, 32, 32, color); // anti-aliased
+	//hub_triangle(scene, x1, y1, x2, y2, x3, y3, color);
+	//hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color); // anti-aliased
+	scene->bcm_mapper(scene, NULL); // render image bugger in scene
+	calcualte_fps(scene->fps);
+    }
+}
+
+int main(int argc, char **argv) {
+	scene_info *scene = defaulint main(int argc, char **argv)
+	t_scene(argc, argv);
+	check_scene(scene);
+	pthread update_thread;
+	pthread_create(&update_thread, NULL, render_loop, scene);
+	render_forever(scene); // does not return
+}
+
+```
+
+
 Example using your own drawing buffer:
 -------------------------------------
 ```c
@@ -206,63 +244,19 @@ imageRGB[((y*scene->width) +x *scene->stride)] = red;
 imageRGB[((y*scene->width) +x *scene->stride)+1] = green;
 imageRGB[((y*scene->width) +x *scene->stride)+2] = blue;
 
-scene->bcm_mapper(scene, imageRGB);
+scene->bcm_mapper(scene, imageRGB);   // pass the imange buffer here. supports RGB with scene->stride = 3 and RGBA with scene->stride = 4
 
 calculate_fps(scene->fps);
 ```
 
-for convenience, you can use the set_pixel24 and set_pixel32 helpers to write image data similar to hzeller's library.
-these functions are inline versions of the above code.
 
-
-Minimul Program
----------------
-```c
-#include <pthread.h>
-#include <rpihub74/rpihub75.h>
-#include <rpihub74/util.h>
-#include <rpihub74/gpu.h>
-#include <rpihub74/pixels.h>
-
-void* render_loop(void *arg) {
-    // get the current scene info
-    scene_info *scene = (scene_info*)arg;
-    for (;;) {
-        int red = 255, green = 128, blue = 64;
-	RGB color = {red, green, blue};
-	hub_pixel(scene, 32, 16, color);
-	hub_pixel(scene, 32, 16, color);
-	hub_line(scene, 5, 5, 32, 32, color);
-	hub_line_aa(scene, 5, 5, 32, 32, color); // anti-aliased
-	//hub_triangle(scene, x1, y1, x2, y2, x3, y3, color);
-	//hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color); // anti-aliased
-	scene->bcm_mapper(scene, NULL);
-	calcualte_fps(scene->fps);
-    }
-}
-
-int main(int argc, char **argv) {
-	scene_info *scene = defaulint main(int argc, char **argv)
-	t_scene(argc, argv);
-	check_scene(scene);
-	pthread update_thread;
-	pthread_create(&update_thread, NULL, render_loop, scene);
-	render_forever(scene); // does not return
-}
-
-```
-
-32bpp RGBA buffer support is useful when pulling data from OpenGL which will output 32bpp RGBA data.
-
-
-
-Users can update either 24bpp RGB or 32bpp RGBA frame buffers directly and then call map_byte_image_to_bcm() after rendering
+Users can update either 24bpp RGB or 32bpp RGBA frame buffers directly and then call scene->bcm_mapper() after rendering
 a new frame. Calling this method will translate the RGB data to BCM bit data. BCM data is organized as a multi dimensional
 array of uint32_t data. Each uint32_t stores a bitmask for the r1,r2,g1,g2,b1,b2 pins for the current pixel's bit-plane. There
 is no need to call any other functions as the "render_forever()" code pulls directly from this buffer.
 
 
-RGB to PWM Mapping
+RGB to BCM Mapping
 ------------------
 
 Data is indexed as follows where bcm is the current bit plane index (0 - bit_depth):
