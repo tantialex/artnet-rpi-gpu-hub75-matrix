@@ -168,4 +168,13 @@ void *calibrate_panels(void *arg);
  */
 void* receive_udp_data(void *arg);
 
+/**
+ * @brief  test if a file has a specific extension
+ * 
+ * @param filename 
+ * @param extension 
+ * @return true|false
+ */
+bool has_extension(const char *filename, const char *extension);
+
 #endif

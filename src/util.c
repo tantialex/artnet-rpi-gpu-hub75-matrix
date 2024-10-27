@@ -53,6 +53,25 @@ void debug(const char *format, ...) {
 
 
 /**
+ * @brief  test if a file has a specific extension
+ * 
+ * @param filename 
+ * @param extension 
+ * @return true|false
+ */
+bool has_extension(const char *filename, const char *extension) {
+    // Find the last occurrence of '.' in the filename
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) {
+        // No extension found or filename starts with '.'
+        return false;
+    }
+
+    // Compare the found extension with the known extension (case-sensitive)
+    return strcmp(dot + 1, extension) == 0;
+}
+
+/**
  * @brief write data to a file, exit on any failure
  * 
  * @param filename filename to write to (wb)

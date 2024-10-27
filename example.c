@@ -97,15 +97,15 @@ int main(int argc, char **argv)
     // use the gpu shader renderer if we have one, else use the cpu renderer above
     if (scene->shader_file == NULL) {
         pthread_create(&update_thread, NULL, render_cpu, scene);
-    } else {
-<<<<<<< HEAD
-        scene->stride = 4;    // glReadPixels() returns 4 byte RGBA pixels
-=======
+    } else if has_extension(scene->shader_file, "glsl"){
         printf("render shader [%s]", scene->shader_file);
         scene->stride = 4;
->>>>>>> 29cad8838ede1a34d19f34ce5f00a9e8e5bcd84e
         pthread_create(&update_thread, NULL, render_shader, scene);
+    } else {
+        printf("render video [%s]", scene->shader_file);
+        pthread_create(&update_thread, NULL, render_video_fn, scene);
     }
+
 
     // this function will never return. make sure you have already forked your drawing thread 
     // before calling this function

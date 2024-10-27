@@ -3,7 +3,7 @@
 CC = gcc
 #CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Wdouble-promotion -Iinclude
 CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Iinclude
-LDFLAGS = -lpthread -lrt -lm -lc
+LDFLAGS = -lpthread -lrt -lm -lc -lavformat -lavcodec -lswscale -lavutil
 CFLAGS += $(DEF)
 
 # Directories
@@ -98,6 +98,7 @@ $(BUILDDIR)/%.o: src/%.c | $(BUILDDIR)
 
 # Dependencies (optional)
 $(BUILDDIR)/util.o: src/util.c include/util.h
-$(BUILDDIR)/pixels.o: src/pixels.c 
+$(BUILDDIR)/pixels.o: src/pixels.c include/rpihub75.h include/pixels.h
+$(BUILDDIR)/video.o: src/video.c include/rpihub75.h
 $(BUILDDIR)/gpio.o: src/gpio.c include/rpihub75.h
 $(BUILDDIR)/gpu.o: src/gpu.c include/rpihub75.h include/stb_image.h
