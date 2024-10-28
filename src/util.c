@@ -548,6 +548,7 @@ scene_info *default_scene(int argc, char **argv) {
                 if (level < 0.1f || level  > 5.0f) {
                     level = 1.0f;
                 }
+                debug("reinhard level %f\n", (double)level);
                 scene->tone_level = level;
                 scene->tone_mapper = reinhard_tone_mapperF;
             } else if (strcmp(tone, "hable") == 0) {
@@ -558,6 +559,7 @@ scene_info *default_scene(int argc, char **argv) {
                 if (level < 0.1f || level  > 5.0f) {
                     level = 1.0f;
                 }
+                debug("saturation level %f\n", (double)level);
                 scene->tone_level = level;
                 scene->tone_mapper = saturation_tone_mapperF;
             } else if (strcmp(tone, "sigmoid") == 0) {

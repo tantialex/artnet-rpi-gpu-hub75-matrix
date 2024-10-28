@@ -299,9 +299,9 @@ inline void saturation_tone_mapperF(const RGBF *__restrict__ in, RGBF *__restric
     Normal lum = luminance(in);
     Normal gamma_lum = powf(lum, 1.0f / 2.2f);
 
-    out->r = clampf(lum + level * (in->r - lum), 0.0f, 1.0f);
-    out->g = clampf(lum + level * (in->g - lum), 0.0f, 1.0f);
-    out->b = clampf(lum + level * (in->b - lum), 0.0f, 1.0f);
+    out->r = clampf((lum + level) * (in->r - lum), 0.0f, 1.0f);
+    out->g = clampf((lum + level) * (in->g - lum), 0.0f, 1.0f);
+    out->b = clampf((lum + level) * (in->b - lum), 0.0f, 1.0f);
 
 
     float max = fmaxf(fmaxf(out->r, out->g), out->b);

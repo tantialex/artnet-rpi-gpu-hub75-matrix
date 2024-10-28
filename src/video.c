@@ -19,7 +19,9 @@
 void* render_video_fn(void *arg) {
     scene_info *scene = (scene_info*)arg;
     while (scene->do_render) {
-        hub_render_video(scene, scene->shader_file);
+        if (!hub_render_video(scene, scene->shader_file)) {
+            break;
+        }
     }
 }
 
@@ -31,7 +33,7 @@ void* render_video_fn(void *arg) {
  * @param arg 
  * @return void* 
  */
-void hub_render_video(scene_info *scene, const char *filename) {
+bool hub_render_video(scene_info *scene, const char *filename) {
     AVFormatContext *format_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
     AVCodec *codec = NULL;
@@ -48,13 +50,13 @@ void hub_render_video(scene_info *scene, const char *filename) {
     // Open video file
     if (avformat_open_input(&format_ctx, filename, NULL, NULL) != 0) {
         fprintf(stderr, "Could not open video file\n");
-        return;
+        return false;
     }
 
     // Retrieve stream information
     if (avformat_find_stream_info(format_ctx, NULL) < 0) {
         fprintf(stderr, "Could not find stream information\n");
-        return;
+        return false;
     }
 
     // Find the first video stream
@@ -66,15 +68,19 @@ void hub_render_video(scene_info *scene, const char *filename) {
     }
     if (video_stream_index == -1) {
         fprintf(stderr, "No video stream found\n");
-        return;
+        return false;
     }
+
+    AVStream *video_stream = format_ctx->streams[video_stream_index];
+    AVRational frame_rate = video_stream->avg_frame_rate; // Use avg_frame_rate for variable frame rate videos
+    float fps = (float)av_q2d(frame_rate);
 
     // Get codec parameters and find the decoder for the video stream
     AVCodecParameters *codec_params = format_ctx->streams[video_stream_index]->codecpar;
     codec = avcodec_find_decoder(codec_params->codec_id);
     if (codec == NULL) {
         fprintf(stderr, "Unsupported codec\n");
-        return;
+        return false;
     }
 
     // Allocate codec context
@@ -88,7 +94,7 @@ void hub_render_video(scene_info *scene, const char *filename) {
     // Open codec
     if (avcodec_open2(codec_ctx, codec, NULL) < 0) {
         fprintf(stderr, "Could not open codec\n");
-        return;
+        return false;
     }
 
     // Allocate frames
@@ -96,17 +102,17 @@ void hub_render_video(scene_info *scene, const char *filename) {
     frame_rgb = av_frame_alloc();
     if (!frame || !frame_rgb) {
         fprintf(stderr, "Could not allocate frame memory\n");
-        return;
+        return false;
     }
 
     // Set up RGB frame buffer
     int num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, codec_ctx->width, codec_ctx->height, 1);
-    uint8_t *buffer = (uint8_t *)av_malloc(num_bytes * sizeof(uint8_t));
+    uint8_t *buffer = (uint8_t *)av_malloc(num_bytes * sizeof(uint8_t)*2);
     av_image_fill_arrays(frame_rgb->data, frame_rgb->linesize, buffer, AV_PIX_FMT_RGB24, codec_ctx->width, codec_ctx->height, 1);
 
     // Set up scaling context
     sws_ctx = sws_getContext(codec_ctx->width, codec_ctx->height, codec_ctx->pix_fmt,
-                             codec_ctx->width, codec_ctx->height, AV_PIX_FMT_RGB24,
+                             scene->width, scene->height, AV_PIX_FMT_RGB24,
                              SWS_BILINEAR, NULL, NULL, NULL);
 
     // Read frames
@@ -128,7 +134,7 @@ void hub_render_video(scene_info *scene, const char *filename) {
                     break;
                 else if (response < 0) {
                     fprintf(stderr, "Error during decoding\n");
-                    return;
+                    return false;
                 }
 
                 // Convert the image from its native format to RGB
@@ -140,6 +146,7 @@ void hub_render_video(scene_info *scene, const char *filename) {
                 map_byte_image_to_bcm(scene, frame_rgb->data[0]);
                 // Call the display function
                 //display_frame(frame_rgb->data[0], codec_ctx->width, codec_ctx->height);
+                calculate_fps(fps, scene->show_fps);
             }
         }
         av_packet_unref(&packet);
@@ -152,5 +159,7 @@ void hub_render_video(scene_info *scene, const char *filename) {
     avcodec_free_context(&codec_ctx);
     avformat_close_input(&format_ctx);
     sws_freeContext(sws_ctx);
+
+    return true;
 }
 
