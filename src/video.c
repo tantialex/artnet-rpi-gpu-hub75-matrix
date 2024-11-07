@@ -106,9 +106,9 @@ bool hub_render_video(scene_info *scene, const char *filename) {
     }
 
     // Set up RGB frame buffer
-    int num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, codec_ctx->width, codec_ctx->height, 1);
+    int num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, scene->width, scene->height, 1);
     uint8_t *buffer = (uint8_t *)av_malloc(num_bytes * sizeof(uint8_t)*2);
-    av_image_fill_arrays(frame_rgb->data, frame_rgb->linesize, buffer, AV_PIX_FMT_RGB24, codec_ctx->width, codec_ctx->height, 1);
+    av_image_fill_arrays(frame_rgb->data, frame_rgb->linesize, buffer, AV_PIX_FMT_RGB24, scene->width, scene->height, 1);
 
     // Set up scaling context
     sws_ctx = sws_getContext(codec_ctx->width, codec_ctx->height, codec_ctx->pix_fmt,
@@ -143,6 +143,7 @@ bool hub_render_video(scene_info *scene, const char *filename) {
                           frame_rgb->data, frame_rgb->linesize);
 
 
+                printf("frame linesize: %d, frame_rgb linesize: %d\n", frame->linesize[0], frame_rgb->linesize[0]);
                 map_byte_image_to_bcm(scene, frame_rgb->data[0]);
                 // Call the display function
                 //display_frame(frame_rgb->data[0], codec_ctx->width, codec_ctx->height);
