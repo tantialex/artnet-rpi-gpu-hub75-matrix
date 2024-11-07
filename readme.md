@@ -106,12 +106,12 @@ sudo apt install libavformat-dev libswscale-dev ffmpeg
 git clone https://github.com/bitslip6/rpi-gpu-hub75-matrix
 cd rpi-gpu-hub75-matrix
 
-# NOTE: you cannot compile for multiple boards. pin configuration is defined at compile time for now
-# compile with supports for hzeller's 3 port board:
+# NOTE: you cannot compile for multiple boards. pin configuration is defined at compile time
+# compile with supports for hzeller's 3 port board (default):
 make DEF="-DHZELLER=1"
-# OR compile with support for ada fruit hub75 hat
+# OR compile with support for ada fruit hub75 hat:
 make DEF="-DADA_HAT=1"
-# OR edit include/rpihub75.h and edit teh #define for pin mapping if using a differnt board or pin configuration
+# OR edit include/rpihub75.h and edit teh #define for pin mapping if using a different board or pin configuration
 
 # install the library in /usr/local
 sudo make install
@@ -126,13 +126,13 @@ make example
 # render a shader to 1 64x64 panel, bit depth 32, 120 fps, gamma 1.6, 50% brightness
 ./example -x 64 -y 64 -d 32 -f 120 -g 1.6 -b 128 -s shaders/cartoon.glsl
 # render a IQ's "happy jumping" shader to 128x128 panel, bit depth 64, 2 ports, 2 panels, 60 fps, 
-# mirrored and flippeed, 255 brightness (100%), gamma 2.4, saturation tone mapping level 1.8
+# mirrored and flipped, 255 brightness (100%), gamma 2.4, saturation tone mapping level 1.8
 ./example -x 128 -y 128 -d 64 -p 2 -c 2 -f 60 -i mirror_flip -b 255 -g 2.4 -t saturation:1.8 -s shaders/happy_jump.glsl
 # render the triangle demo on the CPU, see example.c for basic library usage.
 ./example -x 128 -y 128 -d 64 -f 60
-# render the lines gpu shader, 24 bit, with strong floyd steinberg dithering (-l 1-254), gamma 2.2
+# render the lines gpu shader, 24 bit, with strong Floyd Steinberg dithering (-l 1-254), gamma 2.2
 ./example -x 128 -y 128 -d 24 -f 60 -l 250 -g 2.2 -s shaders/lines.glsl
-# comming soon, mp4 drawing, network drawing, improved dithering
+# coming soon, mp4 drawing, network drawing, improved dithering
 ``` 
 
 Compile RealTime Kernel
@@ -141,7 +141,7 @@ Compile RealTime Kernel
 # for compiling the PREEMPT_RT kernel patch (optional)
 sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
 
-# real time kernel patch to remove any flicker:
+# real-time kernel patch to remove any flicker:
 # compile real-time patch for rpi5 6.6 kernel
 # make sure these instructions are updated, visit https://raspberrypi.com/documentation/computers/linux_kernel.html#building
 
@@ -293,7 +293,7 @@ these values would be precomputed after every frame and toggled for each display
 
 each bit plane (that is a uint32_t with all of the pin toggles for all 3 output ports for a particular pixel on a single 
 bit plane, there are bit_depth number of bit planes per image) is updated atomically in a single write. This means there
-is no need for double buffering to achieve flicker-free display. Simply call map_byte_image_to_bcm with your new image
+is no need for double buffering to achieve a flicker-free display. Simply call map_byte_image_to_bcm with your new image
 buffer as often as you like. The data will be overwritten and the new PWM data will be updated immediately. This allows you
 to draw to the display at up to 9600Hz (depending on the number of chained displays) however frame rates of about 120fps seem 
 to produce excellent results and higher frame rates have diminishing returns after that.
@@ -390,7 +390,7 @@ make libgpu
 make 
 # install headers and libraries in /usr/local
 sudo make install
-# you may need to manullay run "sudo ldconfig" depending on your OS ennvironment
+# you may need to manullay run "sudo ldconfig" depending on your OS environment
 
 # to compile the example app without GPU support:
 gcc -O3 -Wall -lrpihub75 example.c -o example 
@@ -443,12 +443,12 @@ void* render_cpu(void *arg) {
 
         RGB color = {ri(250), ri(250), ri(250)};
 
-        // draw a random antialised triangle, see pixels.h for drawing primatives
-        // drawing primatives begin with "hub_" and draw to scene->image buffer
+        // Draw a random antialiased triangle, see pixels.h for drawing primitives
+        // drawing primitives begin with "hub_" and draw to scene->image buffer
         hub_triangle_aa(scene, x1, y1, x2, y2, x3, y3, color);
 
         // render the RGB data to the active PWM buffers. sleep delay the frame to sync with scene->fps
-        // you can optionally draw directly into *image, and then pass image
+        // You can optionally draw directly into *image, and then pass the image
         // to scene->bcm_mapper(scene, image, TRUE);
         scene->bcm_mapper(scene, NULL, TRUE);
     }
@@ -460,19 +460,19 @@ int main(int argc, char **argv)
     // use -h for help, see this function in util.c for more information on command line parsing
     scene_info *scene = default_scene(argc, argv);
 
-    // ensure that the scene is valid
+    // Ensure that the scene is valid
     check_scene(scene);
     
-    // create another thread to run the frame drawing function (GPU or CPU)
+    // Create another thread to run the frame drawing function (GPU or CPU)
     pthread_t update_thread;
-    // use the gpu shader renderer if we have one, else use the cpu renderer above
+    // Use the GPU shader renderer if we have one, else use the CPU renderer above
     if (scene->shader_file == NULL) {
         pthread_create(&update_thread, NULL, render_cpu, scene);
     } else {
         pthread_create(&update_thread, NULL, render_shader, scene);
     }
 
-    // this function will never return
+    // This function will never return
     render_forever(scene);
 }
 ```
@@ -521,7 +521,7 @@ Odds and Ends
 
 I have considered adding image dithering. Since we are going from 8-bit data (24bpp) down to 5 or 6-bit data (32 - 64 bit
 pwm values) we are losing 2-3 bits of data per pixel. What we lose in temporal data (value) we can reintroduce to the image
-spatially. Those 2-3 bits of information can be added to the neighboring pixels using ordered dithering or floyd steinberg 
+spatially. Those 2-3 bits of information can be added to the neighboring pixels using ordered dithering or floyd Steinberg 
 dithering by slightly increasing or decreasing the RGB values of the neighboring pixels based on this loss of information.
 There is some code to achieve this but I have not had the results I would like to see so this is still a work in progress.
 If this is something you are interested in, drop me a line, send me a link to relevant information implementations or send
@@ -530,13 +530,13 @@ a PR.
 I am currently investigating chaining multiple rp2040 chips to multiple chains of HUB75 panels to improve the image 
 stability and the number of supported chained panels. Current thinking is rpi5 has 2 spi lines which are capable of 50Mhz
 operation. Split between 4 rp2040s that allows for 25Mhz data update to each rp2040. With 8 panels attached to each rp2040
-we could address 32 panels with 100Mhz total bandwidth. If we down sample frame data to a 256 color palette, we can send
+we could address 32 panels with 100Mhz total bandwidth. If we downsample frame data to a 256 color palette, we can send
 data to 1 pixel as a single byte. This would allow us to send a single frame of 8 panels in 32KB. at 60fps we have 1.9MB/s
 per rp2040. This data can be sent at 16Mhz. This could allow us to send SPI data to up to 6 rp2040 chips at 16Mhz each
 and 60fps with 8 panels on each rp2040.
 
-The frame data would have a 256 entry 32bcm palette for a total of 1024 bytes at the beginning on the frame describing
-the 256 colors in the frame's palette. each pixel could then be sent as a single byte as a lookup to the pallette color.
+The frame data would have a 256-entry 32bcm palette for a total of 1024 bytes at the beginning on the frame describing
+the 256 colors in the frame's palette. each pixel could then be sent as a single byte as a lookup to the palette color.
 This would allow us to send data 3x faster to the rp2040 chips.
 
 Once frame data was loaded on the rp2040 chip. pio would use a lookup table from raw frame bytes to bcm data and shift out
@@ -553,7 +553,7 @@ Compiler Flags
 --------------
 * be sure to add -O3 to gcc when compiling your source.
 * -ffast-math reduces some precision but improves performance for some cases.
-* -mtune=native will compile for your CPU optomizations.
+* -mtune=native will compile for your CPU optimizations.
 * -Wdouble-promotion can help identify a lot of places where you are actually using double precision (64 bit) not single precision (float)
    obviously, 64bit floats are at least 2x slower than single precision.
 * -fopt-info-vec will show you loops the compiler was able to vectorize for you (SIMD, AVX, SSE, ETC)
