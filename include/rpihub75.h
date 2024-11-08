@@ -18,6 +18,7 @@
 
 //////////////////////////////////////////////////////////
 
+// LINEAR OFFSET SCALE
 #ifndef RED_SCALE
     #define RED_SCALE 0.0f
 #endif
@@ -30,6 +31,8 @@
     #define BLUE_SCALE 0.0f
 #endif
 
+
+// GAMMA OFFSET SCALE (MULTIPLICATION FACTORS FROM BASE GAMMA)
 #ifndef RED_GAMMA_SCALE
     #define RED_GAMMA_SCALE 1.0f
 #endif
@@ -42,6 +45,7 @@
     #define BLUE_GAMMA_SCALE 1.0f
 #endif
 
+// DEFAULT GAMMA, CAN BE SET IN SceneInfo
 #ifndef GAMMA
     #define GAMMA 1.0f
 #endif
@@ -100,23 +104,22 @@
 #define MAX_BITS 64
 
 
-#ifdef PI3
-    #define PERI_BASE   0x3F000000
-    #define GPIO_OFFSET 0x200000
-    #define RIO_OFFSET  0x2E0000 / 4
-    #define PAD_OFFSET  0x2F0000 / 4
-#elif PI4
-    #define PERI_BASE   0xFE000000
-    #define GPIO_OFFSET 0x200000
-    #define RIO_OFFSET  0x2E0000 / 4
-    #define PAD_OFFSET  0x2F0000 / 4
-#else
-    #define PERI_BASE 0x1f000D0000
+    #define PERI3_BASE   0x3F000000
+    #define GPIO3_OFFSET 0x200000
+    #define RIO3_OFFSET  0x2E0000 / 4
+    #define PAD3_OFFSET  0x2F0000 / 4
+
+    #define PERI4_BASE   0xFE000000
+    #define GPIO4_OFFSET 0x200000
+    #define RIO4_OFFSET  0x2E0000 / 4
+    #define PAD4_OFFSET  0x2F0000 / 4
+
+    #define PERI5_BASE 0x1f000D0000
     //#define PERI_BASE 0x1f00000000 // for root access to /dev/mem , skip the 0xD0000 offset
-    #define GPIO_OFFSET 0x00000 / 4  // 0xD0000 is alreay added to the PERI_BASE
-    #define RIO_OFFSET  0x10000 / 4
-    #define PAD_OFFSET  0x20000 / 4
-#endif
+    #define GPIO5_OFFSET 0x00000 / 4  // 0xD0000 is alreay added to the PERI_BASE
+    #define RIO5_OFFSET  0x10000 / 4
+    #define PAD5_OFFSET  0x20000 / 4
+
 
 
 
@@ -129,7 +132,8 @@
 /** @brief  CLEAR GPIO pins in bit mask (dont touch pins not in mask) */
 #define rioCLR ((rioregs *)(RIOBase + 0x3000 / 4))
 
-#define SLOW for (volatile int s=0;s<10;s++) { asm(""); }
+// #define SLOW for (volatile int s=0;s<2;s++) { asm volatile ("" : : : "memory"); asm(""); }
+#define SLOW for (volatile int s=0;s<8;s++) { asm(""); }
 #define SLOW2 for (volatile int s=0;s<2000;s++) { asm(""); }
 
 // helpers for timing things...
@@ -208,6 +212,8 @@
     #define ADDRESS_OE 18
 
 #endif
+
+#define ADDRESS_MASK  1 << ADDRESS_A | 1 << ADDRESS_B | 1 << ADDRESS_C | 1 << ADDRESS_D | 1 << ADDRESS_E
 
 // control pins bit masks
 #define PIN_OE (1 << ADDRESS_OE)

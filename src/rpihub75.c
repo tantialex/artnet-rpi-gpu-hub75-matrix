@@ -115,6 +115,9 @@ void check_scene(const scene_info *scene) {
         die("Max motion blur frames is 32\n");
     }
 
+    if (scene->brightness > 254) {
+        die("Max brightness is 254\n");
+    }
     if (scene->bit_depth % BIT_DEPTH_ALIGNMENT != 0) {
         die("requested bit_depth %d, but %d is not aligned to %d bytes\n"
             "To use this bit depth, you must #define BIT_DEPTH_ALIGNMENT to the\n"
@@ -246,23 +249,24 @@ uint8_t *mirror_flip_mapper(uint8_t *image, uint8_t *image_out, const struct sce
     return image;
 }
 
+
 /**
- * @brief you can cause render_forever to exit by updating the value of do_hub65_render pointer
- * EG:
- * 
- * 
+ * internal method for rendering on pi zero, 3 and 4
  */
-void render_forever(const scene_info *scene) {
+void render_forever_pi4(const scene_info *scene, int version) {
 
     srand(time(NULL));
     // map the gpio address to we can control the GPIO pins
-    uint32_t *PERIBase = map_gpio(0); // for root on pi5 (/dev/mem, offset is 0xD0000)
+    uint32_t *PERIBase = map_gpio(0, version); // for root on pi5 (/dev/mem, offset is 0xD0000)
     // offset to the RIO registers (required for #define register access. 
     // TODO: this needs to be improved and #define to RIOBase removed)
-    const uint32_t *RIOBase  = PERIBase + RIO_OFFSET;
+    if (version == 4) {
+    	configure_gpio(PERIBase, 4);
+    } else if (version == 3) {
+    	configure_gpio(PERIBase, 3);
+    }
 
-    // configure the pins we need for pulldown, 8ma and output
-    configure_gpio(PERIBase);
+
      
     // index into the OE jitter mask
     uint16_t jitter_idx = 0;
@@ -292,16 +296,15 @@ void render_forever(const scene_info *scene) {
         addr_map[i] = row_to_address(i, half_height);
     }
 
-
-
     time_t last_time_s     = time(NULL);
     uint32_t frame_count   = 0;
+    uint32_t last_addr     = 0;
+    uint32_t color_pins    = 0;
 
     // uint8_t bright = scene->brightness;
     while(scene->do_render) {
 
         // iterate over the bit plane
-        //PRE_TIME;
         for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
             time_t current_time_s = time(NULL);
             frame_count++;
@@ -310,17 +313,27 @@ void render_forever(const scene_info *scene) {
             for (uint16_t y=0; y<half_height; y++) {
                 asm volatile ("" : : : "memory");  // Prevents optimization
 
-                // compute the bcm row start address for y
-                // uint32_t offset = ((y * scene->width ) * bit_depth) + pwm;
+                PERIBase[7]  = addr_map[y] & ~last_addr;
+                SLOW
+                PERIBase[10] = ~addr_map[y] & last_addr;
+                SLOW
+                last_addr    = addr_map[y];
+
                 for (uint16_t x=0; x<width; x++) {
                     asm volatile ("" : : : "memory");  // Prevents optimization
-                    // set all bits in 1 op. RGB data, current row address and the OE jitter mask (brightness control)
-                    rio->Out = bcm_signal[offset] | addr_map[y] | jitter_mask[jitter_idx];
-                    
+                    uint32_t new_mask = (bcm_signal[offset]);// | jitter_mask[jitter_idx]);
+                    PERIBase[10]      = (~new_mask & color_pins) | PIN_CLK;
                     SLOW
-                    // toggle clock pin high
-                    rioSET->Out = PIN_CLK;
+                    PERIBase[7]       = (new_mask & ~color_pins);
                     SLOW
+                    SLOW
+                    SLOW
+                    PERIBase[7]       = (new_mask) | PIN_CLK;
+
+                    SLOW
+                    SLOW
+                    SLOW
+                    color_pins        = new_mask;
 
                     // advance the global OE jitter mask 1 frame
                     jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
@@ -328,13 +341,14 @@ void render_forever(const scene_info *scene) {
                     // advance to the next pixel in the bcm signal
                     offset += bit_depth;
                 }
-                // make sure enable pin is high (display off) while we are latching data
-                rio->Out = PIN_OE;
+                PERIBase[7] = PIN_LATCH | PIN_OE;
                 SLOW
-                // latch the data for the entire row
-                rioSET->Out = PIN_LATCH;
                 SLOW
-                rioCLR->Out = PIN_LATCH;
+                PERIBase[10] = PIN_LATCH;
+                SLOW
+                SLOW
+                PERIBase[10] = PIN_OE;
+                SLOW
             }
 
             // swap the buffers on vsync
@@ -352,16 +366,141 @@ void render_forever(const scene_info *scene) {
                 last_time_s = current_time_s;
             }
         }
+    }
+}
 
-/*
-        if (rand() % 3 == 1) {
-            jitter_mask = create_jitter_mask(JITTER_SIZE, bright);
-            bright++;
-            printf("bright: %d\n", bright);
+
+/**
+ * @brief you can cause render_forever to exit by updating the value of do_hub65_render pointer
+ * EG:
+ * 
+ * 
+ */
+void render_forever(const scene_info *scene) {
+
+    pid_t pid = getpid();
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    CPU_SET(3, &cpuset);
+
+    if (sched_setaffinity(pid, sizeof(cpuset), &cpuset) != 0) {
+	    die("unable to set CPU affinity to 3\n");
+    }
+
+    // check the CPU model to determine which GPIO function to use
+    size_t file_sz;
+    char *cpu_info = file_get_contents("/proc/cpuinfo", &file_sz);
+    char *cpu_model = strstr(cpu_info, "Pi 5");
+    if (cpu_model != NULL) {
+        *cpu_model = strstr(cpu_info, "Pi 4");
+        if (cpu_model != NULL) {
+            render_forever_pi4(scene, 4);
         }
-        */
-        //scene->brightness++;
-        //POST_TIME;
+        cpu_model = strstr(cpu_info, "Pi 3");
+        if (cpu_model != NULL) {
+            render_forever_pi4(scene, 3);
+        }
+        die("Only Pi5, Pi4 and Pi3 are currently supported");
+    }
+    
+
+    srand(time(NULL));
+    // map the gpio address to we can control the GPIO pins
+    uint32_t *PERIBase = map_gpio(0, 5); // for root on pi5 (/dev/mem, offset is 0xD0000)
+    // offset to the RIO registers (required for #define register access. 
+    // TODO: this needs to be improved and #define to RIOBase removed)
+    uint32_t *RIOBase;
+    RIOBase = PERIBase + RIO5_OFFSET;
+    configure_gpio(PERIBase, 5);
+         
+    // index into the OE jitter mask
+    uint16_t jitter_idx = 0;
+    // pre compute some variables. let the compiler know the alignment for optimizations
+    const uint8_t  half_height __attribute__((aligned(16))) = scene->panel_height / 2;
+    const uint16_t width __attribute__((aligned(16))) = scene->width;
+    const uint8_t  bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+
+    // pointer to the current bcm data to be displayed
+    uint32_t *bcm_signal = scene->bcm_signalA;
+    ASSERT(width % 16 == 0);
+    ASSERT(half_height % 16 == 0);
+    ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+
+    bool last_pointer = scene->bcm_ptr;
+
+    // create the OE jitter mask to control screen brightness
+    // if we are using BCM brightness, then set OE to 0 (0 is display on ironically)
+    uint32_t *jitter_mask = create_jitter_mask(JITTER_SIZE, scene->brightness);
+    if (scene->jitter_brightness == false) {
+        memset(jitter_mask, 0, JITTER_SIZE);
+    }
+
+    // store the row to address mapping in an array for faster access
+    uint32_t addr_map[half_height];
+    for (int i=0; i<half_height; i++) {
+        addr_map[i] = row_to_address(i, half_height);
+    }
+
+
+    time_t last_time_s     = time(NULL);
+    uint32_t frame_count   = 0;
+    uint32_t addr_pins     = 0;
+    uint32_t color_pins    = 0;
+
+
+    // uint8_t bright = scene->brightness;
+    while(scene->do_render) {
+
+        // iterate over the bit plane
+        //PRE_TIME;
+        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
+            time_t current_time_s = time(NULL);
+            frame_count++;
+            // for the current bit plane, render the entire frame
+            uint32_t offset = pwm;
+            for (uint16_t y=0; y<half_height; y++) {
+                asm volatile ("" : : : "memory");  // Prevents optimization
+
+                // compute the bcm row start address for y
+                // uint32_t offset = ((y * scene->width ) * bit_depth) + pwm;
+
+                for (uint16_t x=0; x<width; x++) {
+                    asm volatile ("" : : : "memory");  // Prevents optimization
+                    // set all bits in 1 op. RGB data, current row address and the OE jitter mask (brightness control)
+                    rio->Out = bcm_signal[offset] | addr_map[y] | jitter_mask[jitter_idx];
+
+                    SLOW
+                    // toggle clock pin high
+                    rioSET->Out = PIN_CLK;
+
+                    // advance the global OE jitter mask 1 frame
+                    jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
+
+                    // advance to the next pixel in the bcm signal
+                    offset += bit_depth;
+                }
+                // make sure enable pin is high (display off) while we are latching data
+                // latch the data for the entire row
+                rioSET->Out = PIN_OE | PIN_LATCH;
+                SLOW
+                rioCLR->Out = PIN_LATCH;
+            }
+
+            // swap the buffers on vsync
+            if (UNLIKELY(scene->bcm_ptr != last_pointer)) {
+                last_pointer = scene->bcm_ptr;
+                bcm_signal = (last_pointer) ? scene->bcm_signalB : scene->bcm_signalA;
+            }
+
+            if (UNLIKELY(current_time_s >= last_time_s + 5)) {
+                if (scene->show_fps) {
+                    printf("Panel Refresh Rate: %dHz\n", frame_count / 5);
+                }
+                frame_count = 0;
+                last_time_s = current_time_s;
+            }
+        }
+
     }
 }
 

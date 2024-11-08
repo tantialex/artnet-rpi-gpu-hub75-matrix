@@ -120,7 +120,7 @@ long calculate_fps(const uint16_t target_fps, const bool show_fps);
  * @param offset 
  * @return uint32_t* 
  */
-uint32_t* map_gpio(uint32_t offset);
+uint32_t* map_gpio(uint32_t offset, int version);
 
 /**
  * @brief set the GPIO pins for hub75 operation.  this is based on hzeller's active board pinouts
@@ -128,7 +128,7 @@ uint32_t* map_gpio(uint32_t offset);
  * 
  * @param PERIBase 
  */
-void configure_gpio(uint32_t *PERIBase);
+void configure_gpio(uint32_t *PERIBase, int version);
 
 /**
  * @brief display command line scene configuration options and exit
