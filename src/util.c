@@ -281,23 +281,41 @@ long calculate_fps(const uint16_t target_fps, const bool show_fps) {
  * @param offset 
  * @return uint32_t* 
  */
-uint32_t* map_gpio(uint32_t offset) {
+uint32_t* map_gpio(uint32_t offset, int version) {
+
+    off_t peri = 0;
+    int mem_fd = 0; 
+    if (version == 4) {
+	    peri = PERI4_BASE;
+     	    mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    } else if (version == 3) {
+	    peri = PERI3_BASE;
+     	    mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
+    } else if (version == 5) {
+	    peri = PERI5_BASE;
+     	    mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
+    } else {
+	    die("unknown pi version\n");
+    }
+
+    printf("peripheral address: %lx\n", peri);
 
     asm volatile ("" : : : "memory");  // Prevents optimization
-    int mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
     uint32_t *map = (uint32_t *)mmap(
         NULL,
         64 * 1024 * 1024,
         (PROT_READ | PROT_WRITE),
         MAP_SHARED,
         mem_fd,
-        PERI_BASE
+        peri
     );
         //0x1f00000000 (on pi5 for root access to /dev/mem use this address)
     if (map == MAP_FAILED) {
-        die("mmap failed: %s [%ld] / [%lx]\n", strerror(errno), PERI_BASE, PERI_BASE);
+        die("mmap failed: %s [%ld] / [%lx]\n", strerror(errno), peri, peri);
     }
-    close(mem_fd);
+    if (mem_fd != 0) {
+    	close(mem_fd);
+    }
 
     printf("gpio mapped\n");
     return map;
@@ -317,6 +335,45 @@ char getch() {
     return ch;
 }
  
+void configure_gpio_4(uint32_t *PERIBase, int version) {
+
+    for (uint32_t pin_num=2; pin_num<28; pin_num++) {
+        asm volatile ("" : : : "memory");  // Prevents optimization
+					   
+	uint32_t sel_reg = (pin_num / 10);
+	uint32_t sel_shift = ((pin_num % 10) * 3);
+
+	PERIBase[sel_reg] = (PERIBase[sel_reg] & ~(0b111 << sel_shift)) | (0b001 << sel_shift);
+	// set pin to output mode
+	//PERIBase[sel_reg] &= ~(0b111 << sel_shift);
+	//PERIBase[sel_reg] |= (0b111 << sel_shift);
+	printf("%d output mode enabled\n", pin_num);
+
+	/*
+	PERIBase[138] &= ~(1 << (pin_num % 32));
+
+	printf("%d fast slew enabled\n", pin_num);
+	*/
+
+	uint pdn_reg   = (57 + (pin_num / 16));
+	uint pdn_shift = ((pin_num % 16) * 2);
+
+	PERIBase[pdn_reg] &= ~(0b11 << pdn_shift);
+	PERIBase[pdn_reg] |= 0b10 << pdn_shift;
+	printf("%d pull down enabled\n", pin_num);
+
+	uint drive_reg   = (129 + (pin_num / 16));
+	uint drive_shift = ((pin_num % 16) * 2);
+
+	PERIBase[drive_reg] &= ~(0b11 << drive_shift);
+	PERIBase[drive_reg] |= 0b11 << drive_shift;
+	printf("%d pull down enabled\n", pin_num);
+
+
+
+
+    }
+}
 
 /**
  * @brief set the GPIO pins for hub75 operation.  this is based on hzeller's active board pinouts
@@ -324,16 +381,27 @@ char getch() {
  * 
  * @param PERIBase 
  */
-void configure_gpio(uint32_t *PERIBase) {
+void configure_gpio(uint32_t *PERIBase, int version) {
     // set all GPIO pins to output mode, fast slew rate, pull down enabled
     // https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html
+    //
+
+    uint32_t pad_off = PAD5_OFFSET; 
+    uint32_t gpio_off = GPIO5_OFFSET; 
+    uint32_t rio_off = RIO5_OFFSET; 
+    if (version <= 4) {
+	    configure_gpio_4(PERIBase, version);
+	    return;
+    }
 
     for (uint32_t pin_num=2; pin_num<28; pin_num++) {
         asm volatile ("" : : : "memory");  // Prevents optimization
-        uint32_t *PADBase  = PERIBase + PAD_OFFSET;
+        uint32_t *PADBase  = PERIBase + pad_off;
         uint32_t *pad = PADBase + 1;   
-        uint32_t *GPIOBase = PERIBase + GPIO_OFFSET;
-        uint32_t *RIOBase = PERIBase + RIO_OFFSET;
+        uint32_t *GPIOBase = PERIBase + gpio_off;
+        uint32_t *RIOBase = PERIBase + rio_off;
+
+	printf("configure pin %d\n", pin_num);
         GPIO[pin_num].ctrl = 5;
         pad[pin_num] = 0x15;
 
