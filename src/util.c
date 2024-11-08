@@ -284,20 +284,23 @@ long calculate_fps(const uint16_t target_fps, const bool show_fps) {
 uint32_t* map_gpio(uint32_t offset, int version) {
 
     off_t peri = 0;
+    int mem_fd = 0; 
     if (version == 4) {
 	    peri = PERI4_BASE;
+     	    mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
     } else if (version == 3) {
 	    peri = PERI3_BASE;
+     	    mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
     } else if (version == 5) {
 	    peri = PERI5_BASE;
+     	    mem_fd = open("/dev/gpiomem0", O_RDWR | O_SYNC);
     } else {
 	    die("unknown pi version\n");
     }
 
-    printf("perhiperal address: %lx\n", peri);
+    printf("peripheral address: %lx\n", peri);
 
     asm volatile ("" : : : "memory");  // Prevents optimization
-    int mem_fd = open("/dev/gpiomem", O_RDWR | O_SYNC);
     uint32_t *map = (uint32_t *)mmap(
         NULL,
         64 * 1024 * 1024,
@@ -310,7 +313,9 @@ uint32_t* map_gpio(uint32_t offset, int version) {
     if (map == MAP_FAILED) {
         die("mmap failed: %s [%ld] / [%lx]\n", strerror(errno), peri, peri);
     }
-    close(mem_fd);
+    if (mem_fd != 0) {
+    	close(mem_fd);
+    }
 
     printf("gpio mapped\n");
     return map;
@@ -360,8 +365,8 @@ void configure_gpio_4(uint32_t *PERIBase, int version) {
 	uint drive_reg   = (129 + (pin_num / 16));
 	uint drive_shift = ((pin_num % 16) * 2);
 
-	PERIBase[drive_reg] &= ~(0b11 << pdn_shift);
-	PERIBase[drive_reg] |= 0b11 << pdn_shift;
+	PERIBase[drive_reg] &= ~(0b11 << drive_shift);
+	PERIBase[drive_reg] |= 0b11 << drive_shift;
 	printf("%d pull down enabled\n", pin_num);
 
 
@@ -385,7 +390,8 @@ void configure_gpio(uint32_t *PERIBase, int version) {
     uint32_t gpio_off = GPIO5_OFFSET; 
     uint32_t rio_off = RIO5_OFFSET; 
     if (version <= 4) {
-	    return configure_gpio_4(PERIBase, version);
+	    configure_gpio_4(PERIBase, version);
+	    return;
     }
 
     for (uint32_t pin_num=2; pin_num<28; pin_num++) {
