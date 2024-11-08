@@ -1,10 +1,12 @@
 This library implements HUB75 protocol on the rpi5
 ==================================================
-Library for rendering advanced GPU graphics on HUB75 panels on rpi5. 9600Hz refresh for a single panel. Supports up to 6 chained panels on 3 ports for 18 panels, 384x192 pixels. 64bit BCM for 64 color levels, = 262144 colors. 255 levels of brightness control. GLSL shader support. many tone mappings and gamma correction combinations are possible for complete HDR control.
+Library for rendering advanced GPU graphics on HUB75 panels on Raspberry 5 with a 9600Hz refresh for a single panel. Supports up to 6 chained panels on 3 ports for 18 panels, 384x192 pixels. 64bit BCM for 64 color levels, = 262144 colors. 255 levels of brightness control. GLSL shader support. many tone mappings and gamma correction combinations are possible for complete HDR control.
 
 This is loosely based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
 for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
+
+Support for raspberry pi 4 is provided with significantly degraded performance. The GPIO rise time on Pi4 is 1.5x slower than Pi5 (24ns vs 16ns) and does not have the ability to force bit settings, only to clear OR enable bit settings. This means it takes 2 operations on Pi4 (1 to set and 1 to clear) vs a single operation on Pi5 (1 to set and clear) and both operations are 1.5x slower. This results in a maximum clock speed of 10Mhz. Unfortunately because of the long "settle" time on the GPIO lines, we can only achive about 2-3Mhz operation. Honestly, just upgrade to a pi5 if frame rate or color performance is important for your project at all. Also 64bit color depth results in significant flickering and brightness control is only available via BCM control.
 
 shaders/cartoon.glsl
 ------------------
@@ -14,21 +16,16 @@ shaders/cyber.glsl
 --------------------
 ![Shader Demo 2](https://raw.githubusercontent.com/bitslip6/rpi-gpu-hub75-matrix/refs/heads/main/assets/shader_2.jpg)
 
-shaders/happy_jump.glsl
------------------------
-![Demo Video - Happy Jump](https://raw.github.com/bitslip6/rpi-gpu-hub75-matrix/raw/refs/heads/main/assets/happy_jump.mp4)
-
-
 
 Overview
 --------
-BitBang HUB75 data at steady 20Mhz. Supports 9600Hz refresh rate on a single 64x64 panel. Supports up to 3 ports with 2 pixels 
+BitBang HUB75 data at steady 20Mhz. It supports a 9600Hz refresh rate on Pi5, and 7200Hz on Pi4, for a single 64x64 panel. Supports up to 3 ports with 2 pixels 
 per port per clock cycle. The library handles the double buffering of frame data. Support for 24bpp RGB and 32bpp RGBA
 source image data. Frame rates of >120Hz with 64 bits of BCM data are easily possible with chain lengths of 3 or more. 
 Support for up to 64 bits of binary code modulation data (1/64 pwm cycle for 64 different color levels for each RGB value).
 
 GPU support using Linux's Generic Buffer Manager (gbm), GLESv2, and EGL is also included. This means you can use 
-OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy shaders are included in the shaders
+OpenGL fragment shaders to render PWM data to the hub75 panel. Several shadertoy.org shaders are included in the shaders
 directory.
 
 Multiple tone mapping implementations are provided including ACES, reinhard, and exposure as well as saturation and 
@@ -39,11 +36,11 @@ do not add any delay after initial BCM mapping.
 
 Gamma correction is also provided. Global gamma can be controlled on the command line. Each red, green, and blue color
 channel also has its own gamma correction to help improve color balance. In practice gamma of about 2.2 produces
-generally good results. red, green, and blue gamma are multiplied against base gamma for each color channel so for 
-color-balanced panels, these should all be set to 1 as #define in the header files.
+generally good results. red, green, and blue gamma are multiplied against base gamma for each color channel. For 
+factory color-balanced panels (very common), these should all be set to 1 as #define in include/rpihub75.h (default).
 
 Linear color correction is also provided. You can linearly add + or - red, green and blue to the color channels 
-by adjusting these values in the scene controls. This will effect the generated BCM data that is mapped on every frame.
+by adjusting these values in the scene controls. This will affect the generated BCM data that is mapped on every frame.
 
 No hardware clocks are required for operation so you can run the code with only group gpio
 privileges. Operation is mostly flicker-free, however, you should see the improved response by running with nice -n -20
