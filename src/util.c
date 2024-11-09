@@ -53,6 +53,25 @@ void debug(const char *format, ...) {
 
 
 /**
+ * @brief  test if a file has a specific extension
+ * 
+ * @param filename 
+ * @param extension 
+ * @return true|false
+ */
+bool has_extension(const char *filename, const char *extension) {
+    // Find the last occurrence of '.' in the filename
+    const char *dot = strrchr(filename, '.');
+    if (!dot || dot == filename) {
+        // No extension found or filename starts with '.'
+        return false;
+    }
+
+    // Compare the found extension with the known extension (case-sensitive)
+    return strcmp(dot + 1, extension) == 0;
+}
+
+/**
  * @brief write data to a file, exit on any failure
  * 
  * @param filename filename to write to (wb)
@@ -421,26 +440,26 @@ void configure_gpio(uint32_t *PERIBase, int version) {
 void usage(int argc, char **argv) {
     die(
         "Usage 2: %s\n"
-        "     -s <shader file>  GPU fragment shader file to render\n"
+        "     -s <file>         GPU fragment shader, or mp4 file to render\n"
         "     -x <width>        total pixel width         (16-512)\n"
         "     -y <height>       total pixel height        (16-512)\n"
         "     -w <width>        panel width               (16/32/64)\n"
         "     -h <height>       panel height              (16/32/64)\n"
-        "     -f <fps>          frames per second         (1-255)\n"
+        "     -f <fps>          target frames per second  (1-255)\n"
         "     -p <num ports>    number of ports           (1-3)\n"
         "     -c <num chains>   number of panels chained  (1-16)\n"
         "     -g <gamma>        gamma correction          (1.0-2.8)\n"
         "     -d <bit depth>    bit depth                 (2-64)\n"
-        "     -b <brightness>   overall brightness level  (0-255)\n"
+        "     -b <brightness>   overall brightness level  (0-254)\n"
         "     -l <dither>       dithering intensity level (0-10)\n"
         "     -m <frames>       motion blur frames        (0-32)\n"
         "     -i <mapper>       image mapper (mirror, flip, mirror_flip)\n"
         "     -t <tone_mapper>  (aces, reinhard, none, saturation, sigmoid, hable)\n"
-        "     -j                adjust brightness in pixel BCM, not recommended\n"
+        "     -j                adjust brightness in pixel BCM, only for Pi3-4\n"
         "     -z                run LED calibration script\n"
-        "     -n                display data from UDP server on port %d\n"
+        "     -n                display data from UDP server on port %d (untested)\n"
         "     -o                display current FPS and Panel refresh Hz\n"
-        "     -h                this help\n", argv[0], SERVER_PORT);
+        "     -?                this help\n", argv[0], SERVER_PORT);
 }
 
 
@@ -594,6 +613,7 @@ scene_info *default_scene(int argc, char **argv) {
                 if (level < 0.1f || level  > 5.0f) {
                     level = 1.0f;
                 }
+                debug("reinhard level %f\n", (double)level);
                 scene->tone_level = level;
                 scene->tone_mapper = reinhard_tone_mapperF;
             } else if (strcmp(tone, "hable") == 0) {
@@ -604,6 +624,7 @@ scene_info *default_scene(int argc, char **argv) {
                 if (level < 0.1f || level  > 5.0f) {
                     level = 1.0f;
                 }
+                debug("saturation level %f\n", (double)level);
                 scene->tone_level = level;
                 scene->tone_mapper = saturation_tone_mapperF;
             } else if (strcmp(tone, "sigmoid") == 0) {
