@@ -388,11 +388,11 @@ void render_forever(const scene_info *scene) {
     }
 
     // check the CPU model to determine which GPIO function to use
-    size_t file_sz;
+    long file_sz;
     char *cpu_info = file_get_contents("/proc/cpuinfo", &file_sz);
     char *cpu_model = strstr(cpu_info, "Pi 5");
     if (cpu_model != NULL) {
-        *cpu_model = strstr(cpu_info, "Pi 4");
+        cpu_model = strstr(cpu_info, "Pi 4");
         if (cpu_model != NULL) {
             render_forever_pi4(scene, 4);
         }
@@ -444,8 +444,8 @@ void render_forever(const scene_info *scene) {
 
     time_t last_time_s     = time(NULL);
     uint32_t frame_count   = 0;
-    uint32_t addr_pins     = 0;
-    uint32_t color_pins    = 0;
+    // uint32_t addr_pins     = 0;
+    // uint32_t color_pins    = 0;
 
 
     // uint8_t bright = scene->brightness;

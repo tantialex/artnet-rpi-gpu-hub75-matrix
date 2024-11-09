@@ -20,6 +20,7 @@
 #include <rpihub75/rpihub75.h>
 #include <rpihub75/util.h>
 #include <rpihub75/gpu.h>
+#include <rpihub75/video.h>
 #include <rpihub75/pixels.h>
 
 unsigned int ri(unsigned int max) {
