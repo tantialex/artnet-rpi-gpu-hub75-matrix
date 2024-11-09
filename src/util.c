@@ -372,26 +372,26 @@ void configure_gpio(uint32_t *PERIBase) {
 void usage(int argc, char **argv) {
     die(
         "Usage 2: %s\n"
-        "     -s <shader file>  GPU fragment shader file to render\n"
+        "     -s <file>         GPU fragment shader, or mp4 file to render\n"
         "     -x <width>        total pixel width         (16-512)\n"
         "     -y <height>       total pixel height        (16-512)\n"
         "     -w <width>        panel width               (16/32/64)\n"
         "     -h <height>       panel height              (16/32/64)\n"
-        "     -f <fps>          frames per second         (1-255)\n"
+        "     -f <fps>          target frames per second  (1-255)\n"
         "     -p <num ports>    number of ports           (1-3)\n"
         "     -c <num chains>   number of panels chained  (1-16)\n"
         "     -g <gamma>        gamma correction          (1.0-2.8)\n"
         "     -d <bit depth>    bit depth                 (2-64)\n"
-        "     -b <brightness>   overall brightness level  (0-255)\n"
+        "     -b <brightness>   overall brightness level  (0-254)\n"
         "     -l <dither>       dithering intensity level (0-10)\n"
         "     -m <frames>       motion blur frames        (0-32)\n"
         "     -i <mapper>       image mapper (mirror, flip, mirror_flip)\n"
         "     -t <tone_mapper>  (aces, reinhard, none, saturation, sigmoid, hable)\n"
-        "     -j                adjust brightness in pixel BCM, not recommended\n"
+        "     -j                adjust brightness in pixel BCM, only for Pi3-4\n"
         "     -z                run LED calibration script\n"
-        "     -n                display data from UDP server on port %d\n"
+        "     -n                display data from UDP server on port %d (untested)\n"
         "     -o                display current FPS and Panel refresh Hz\n"
-        "     -h                this help\n", argv[0], SERVER_PORT);
+        "     -?                this help\n", argv[0], SERVER_PORT);
 }
 
 

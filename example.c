@@ -90,16 +90,15 @@ int main(int argc, char **argv)
     check_scene(scene);
 
     
-    
-    
     // create another thread to run the frame drawing function (GPU or CPU)
     pthread_t update_thread;
-    // use the gpu shader renderer if we have one, else use the cpu renderer above
+    // use the CPU renderer if no shader or video file was passed
     if (scene->shader_file == NULL) {
         pthread_create(&update_thread, NULL, render_cpu, scene);
     }
+    // use the gpu shader or video renderer if we have one, else use the cpu renderer above
     if (access(scene->shader_file, R_OK) == 0) {
-        else if has_extension(scene->shader_file, "glsl"){
+        if (has_extension(scene->shader_file, "glsl")) {
             printf("render shader [%s]", scene->shader_file);
             scene->stride = 4;
             pthread_create(&update_thread, NULL, render_shader, scene);
