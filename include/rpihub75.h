@@ -129,7 +129,7 @@
 /** @brief  CLEAR GPIO pins in bit mask (dont touch pins not in mask) */
 #define rioCLR ((rioregs *)(RIOBase + 0x3000 / 4))
 
-#define SLOW for (volatile int s=0;s<10;s++) { asm(""); }
+#define SLOW for (volatile int s=0;s<40;s++) { asm(""); }
 #define SLOW2 for (volatile int s=0;s<2000;s++) { asm(""); }
 
 // helpers for timing things...

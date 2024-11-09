@@ -14,7 +14,7 @@ BUILDDIR = build
 
 # Source files
 SRC_COMMON = src/util.c src/pixels.c src/rpihub75.c
-SRC_GPU = src/gpu.c
+SRC_GPU = src/gpu.c src/video.c
 
 # Library output names
 LIB_NO_GPU = librpihub75.so
@@ -81,6 +81,7 @@ install: all
 	cp include/util.h $(INCLUDEDIR)
 	cp include/gpu.h $(INCLUDEDIR)
 	cp include/pixels.h $(INCLUDEDIR)
+	cp include/video.h $(INCLUDEDIR)
 	# Copy libraries
 	cp $(LIB_NO_GPU) $(LIB_GPU) $(LIBDIR)
 	ldconfig

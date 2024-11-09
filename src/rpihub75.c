@@ -317,10 +317,10 @@ void render_forever(const scene_info *scene) {
                     // set all bits in 1 op. RGB data, current row address and the OE jitter mask (brightness control)
                     rio->Out = bcm_signal[offset] | addr_map[y] | jitter_mask[jitter_idx];
                     
-                    SLOW
+                    //SLOW
                     // toggle clock pin high
                     rioSET->Out = PIN_CLK;
-                    SLOW
+                    //SLOW
 
                     // advance the global OE jitter mask 1 frame
                     jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
@@ -328,12 +328,13 @@ void render_forever(const scene_info *scene) {
                     // advance to the next pixel in the bcm signal
                     offset += bit_depth;
                 }
+                //SLOW
                 // make sure enable pin is high (display off) while we are latching data
                 rio->Out = PIN_OE;
-                SLOW
+                //SLOW
                 // latch the data for the entire row
                 rioSET->Out = PIN_LATCH;
-                SLOW
+                //SLOW
                 rioCLR->Out = PIN_LATCH;
             }
 

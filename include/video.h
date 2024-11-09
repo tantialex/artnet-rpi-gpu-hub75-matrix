@@ -18,4 +18,4 @@ void* render_video_fn(void *arg);
  * @param arg 
  * @return void* 
  */
-void hub_render_video(scene_info *scene, const char *filename);
+bool hub_render_video(scene_info *scene, const char *filename);

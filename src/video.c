@@ -2,10 +2,15 @@
 #include <stdlib.h>
 #include <stdbool.h>
 
+#include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
 
 #include "rpihub75.h"
+#include "video.h"
+#include "pixels.h"
+#include "util.h"
 
 /**
  * @brief pass this function to your pthread_create() call to render a video file
@@ -23,6 +28,8 @@ void* render_video_fn(void *arg) {
             break;
         }
     }
+
+    return NULL;
 }
 
 /**
@@ -36,16 +43,17 @@ void* render_video_fn(void *arg) {
 bool hub_render_video(scene_info *scene, const char *filename) {
     AVFormatContext *format_ctx = NULL;
     AVCodecContext *codec_ctx = NULL;
-    AVCodec *codec = NULL;
+    //AVCodec *codec = NULL;
     AVFrame *frame = NULL;
     AVFrame *frame_rgb = NULL;
     AVPacket packet;
     struct SwsContext *sws_ctx = NULL;
 
     int video_stream_index = -1;
+    scene->stride = 3;
 
     // Register all formats and codecs
-    av_register_all();
+    // av_register_all();
 
     // Open video file
     if (avformat_open_input(&format_ctx, filename, NULL, NULL) != 0) {
@@ -77,7 +85,7 @@ bool hub_render_video(scene_info *scene, const char *filename) {
 
     // Get codec parameters and find the decoder for the video stream
     AVCodecParameters *codec_params = format_ctx->streams[video_stream_index]->codecpar;
-    codec = avcodec_find_decoder(codec_params->codec_id);
+    const AVCodec *codec = avcodec_find_decoder(codec_params->codec_id);
     if (codec == NULL) {
         fprintf(stderr, "Unsupported codec\n");
         return false;
@@ -87,7 +95,7 @@ bool hub_render_video(scene_info *scene, const char *filename) {
     codec_ctx = avcodec_alloc_context3(codec);
     if (!codec_ctx) {
         fprintf(stderr, "Failed to allocate codec context\n");
-        return;
+        return false;
     }
     avcodec_parameters_to_context(codec_ctx, codec_params);
 
@@ -104,6 +112,10 @@ bool hub_render_video(scene_info *scene, const char *filename) {
         fprintf(stderr, "Could not allocate frame memory\n");
         return false;
     }
+
+    //AVStream *video_stream = format_ctx->streams[video_stream_index];
+    //AVRational frame_rate = video_stream->avg_frame_rate; // Use avg_frame_rate for variable frame rate videos
+    //int fps = (int)av_q2d(frame_rate);
 
     // Set up RGB frame buffer
     int num_bytes = av_image_get_buffer_size(AV_PIX_FMT_RGB24, scene->width, scene->height, 1);
@@ -143,11 +155,9 @@ bool hub_render_video(scene_info *scene, const char *filename) {
                           frame_rgb->data, frame_rgb->linesize);
 
 
-                printf("frame linesize: %d, frame_rgb linesize: %d\n", frame->linesize[0], frame_rgb->linesize[0]);
                 map_byte_image_to_bcm(scene, frame_rgb->data[0]);
-                // Call the display function
-                //display_frame(frame_rgb->data[0], codec_ctx->width, codec_ctx->height);
-                calculate_fps(fps, scene->show_fps);
+
+		calculate_fps(fps, scene->show_fps);
             }
         }
         av_packet_unref(&packet);
