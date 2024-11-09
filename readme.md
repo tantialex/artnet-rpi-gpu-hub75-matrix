@@ -19,7 +19,7 @@ shaders/cyber.glsl
 
 Overview
 --------
-BitBang HUB75 data at steady 20Mhz. It supports a 9600Hz refresh rate on Pi5, and 7200Hz on Pi4, for a single 64x64 panel. Supports up to 3 ports with 2 pixels 
+BitBang HUB75 data at steady 20Mhz. It supports a 9600Hz refresh rate on Pi5, and 1500Hz on Pi4, for a single 64x64 panel. Supports up to 3 ports with 2 pixels 
 per port per clock cycle. The library handles the double buffering of frame data. Support for 24bpp RGB and 32bpp RGBA
 source image data. Frame rates of >120Hz with 64 bits of BCM data are easily possible with chain lengths of 3 or more. 
 Support for up to 64 bits of binary code modulation data (1/64 pwm cycle for 64 different color levels for each RGB value).
