@@ -1,12 +1,12 @@
 This library implements HUB75 protocol on the rpi5
 ==================================================
-Library for rendering advanced GPU graphics on HUB75 panels on Raspberry 5 with a 9600Hz refresh for a single panel. Supports up to 6 chained panels on 3 ports for 18 panels, 384x192 pixels. 64bit BCM for 64 color levels, = 262144 colors. 255 levels of brightness control. GLSL shader support. many tone mappings and gamma correction combinations are possible for complete HDR control.
+Library for rendering advanced GPU graphics and video on HUB75 panels on Raspberry 5 with a 9600Hz refresh for a single panel. Supports up to 6 chained panels on 3 ports for 18 panels, 384x192 pixels. 64bit BCM for 64 color levels, = 262144 colors. 255 levels of brightness control. GLSL shader support. Many tone mappings and gamma correction combinations are possible for complete HDR image control.
+
+Support for raspberry pi 4 is provided with significantly degraded performance. The GPIO rise time on Pi4 is 1.5x slower than Pi5 (24ns vs 16ns) and does not have the ability to force bit settings, only to clear OR enable bit settings. This means it takes 2 operations on Pi4 (1 to set and 1 to clear) vs a single operation on Pi5 (1 to set and clear) and both operations are 1.5x slower. This results in a maximum clock speed of 10Mhz. Unfortunately because of the long "settle" time on the GPIO lines, we can only achive about 2-3Mhz operation. Honestly, just upgrade to a pi5 if frame rate or color performance is important for your project at all. Also 64bit color depth results in significant flickering and brightness control is only available via BCM control.
 
 This is loosely based on the work done by hzeller adding HUB75 support to RPI (www.github.com/hzeller/rpi-rgb-led-matrix)
 as well as the work of Harry Fairhead documenting the peripheral address space for rpi5(https://www.i-programmer.info/programming/148-hardware/16887-raspberry-pi-iot-in-c-pi-5-memory-mapped-gpio.html). Also thanks to nothings stb image loader library which is used
 for loading textures for shaders. https://github.com/nothings/stb/blob/master/stb_image.h
-
-Support for raspberry pi 4 is provided with significantly degraded performance. The GPIO rise time on Pi4 is 1.5x slower than Pi5 (24ns vs 16ns) and does not have the ability to force bit settings, only to clear OR enable bit settings. This means it takes 2 operations on Pi4 (1 to set and 1 to clear) vs a single operation on Pi5 (1 to set and clear) and both operations are 1.5x slower. This results in a maximum clock speed of 10Mhz. Unfortunately because of the long "settle" time on the GPIO lines, we can only achive about 2-3Mhz operation. Honestly, just upgrade to a pi5 if frame rate or color performance is important for your project at all. Also 64bit color depth results in significant flickering and brightness control is only available via BCM control.
 
 shaders/cartoon.glsl
 ------------------
@@ -51,7 +51,6 @@ This implementation only supports rpi5 at the moment. It should be simple to add
 the memory-mapped peripheral address for the GPIO pins is required. Preliminary GPIO peripheral offsets are in
 rpihub75.h. There is a #ifdef PI3, PI4 and it defaults to PI5. If you are inclined, please test on an earlier PI
 and send a PR with the correct offsets for ZERO, PI3, and PI4.
-
 
 Please read HZeller's excellent write-up on wiring the PI to the HUB75 display.  I highly recommend using one of his
 active 3 port boards to ensure proper level translation and to map the address lines, OE, and clock pins to all 3 boards
@@ -308,8 +307,8 @@ mask for every pixel, we are able to output our normal BCM color data and toggle
 averaging out to the current brightness level. This provides fine-tuned brightness control (255 levels) while
 maintaining excellent color balance.
 
-Alternatively, you can encode brightness data directly into the PWM data, however, this yields very poor results for low
-brightness levels even when using 64 bits of BCM data. this is controlled via the scene_info->jitter_brightness boolean.
+Alternatively, you can encode brightness data directly into the PWM data, however, this yields  poor results for low
+brightness levels even when using 64 bits of BCM data. This feature is primarly for Pi3 & 4 models.
 
 
 The mapping from 24bpp (or 32bpp) RGB data to BCM data is very optimized. It uses 128-bit SIMD vectors for the innermost
@@ -490,7 +489,7 @@ pwm_mapping function for the scene. (see func_bcm_mapper_t)
 
 ```txt
  Usage: ./example
-     -s <shader file>  GPU fragment shader file to render
+     -s <file>         GPU fragment shader or video file (mp2, mp4, etc) to render
      -x <width>        image width              (16-384)
      -y <height>       image height             (16-384)
      -w <width>        panel width              (16/32/64)
@@ -503,10 +502,10 @@ pwm_mapping function for the scene. (see func_bcm_mapper_t)
      -b <brightness>   overall brightness level (0-255)
      -m <frames>       motion blur frames       (0-32)
      -l <dither>       dither strength, 0 = off (0.0-10.0)
-     -i <mapper>       image mapper (mirror, flip, mirror_flip) (need support for U and V mapping)
+     -i <mapper>       image mapper (mirror, flip, mirror_flip) (need to add support for U and V mapping)
       // both sigmoid and saturation tone mappers accept a level ie: saturation:2.0
      -t <tone_mapper>  (aces, reinhard, none, saturation:0.5-5.0, sigmoid:0.5-2.0, hable)
-     -j                adjust brightness in BCM data, not recommended
+     -j                adjust brightness in BCM data, only for pi3-4
      -z                run LED calibration script
      -o                display FPS counters and panel refresh rate in Hz
 ```
