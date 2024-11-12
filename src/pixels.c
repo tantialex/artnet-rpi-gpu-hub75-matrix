@@ -946,7 +946,7 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
         ? (scene->bcm_signalA)
         : (scene->bcm_signalB);
 
-    // convineance variables
+    // convenience variables
     const uint16_t stride     = scene->stride;
     const uint8_t  bit_depth  = scene->bit_depth;
     //const uint16_t height     = scene->height;
@@ -954,17 +954,17 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
 
 
     if (scene->dither > 0.1f) {
-        float *dither_ptr = dither_map;
-        const uint16_t width = scene->width;
+        float *dither_ptr     = dither_map;
+        const uint16_t width  = scene->width;
         const uint16_t height = scene->height;
         for (uint16_t y=0; y < height; y++) {
             image_ptr         = base_ptr + y * row_stride;
             for (uint16_t x=0; x < width; x++) {
 
                 // update this pixel with the dither error corrected value
-                image_ptr[0] = (uint8_t)clampf(image_ptr[0] + dither_ptr[0], 0.0f, 255.f);
-                image_ptr[1] = (uint8_t)clampf(image_ptr[1] + dither_ptr[1], 0.0f, 255.f);
-                image_ptr[2] = (uint8_t)clampf(image_ptr[2] + dither_ptr[2], 0.0f, 255.f);
+                image_ptr[0] = image_ptr[0] == 0 ? 0 : (uint8_t)clampf((float)image_ptr[0] + dither_ptr[0], 1.0f, 250.0f);
+                image_ptr[1] = image_ptr[1] == 0 ? 0 : (uint8_t)clampf((float)image_ptr[1] + dither_ptr[1], 1.0f, 250.0f);
+                image_ptr[2] = image_ptr[2] == 0 ? 0 : (uint8_t)clampf((float)image_ptr[2] + dither_ptr[2], 1.0f, 250.0f);
 
                 image_ptr += stride;
                 dither_ptr += stride;
@@ -984,7 +984,7 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
             // writes bit_depth *(sizeof(uint32_t)) bytes to bcm_signal
             update_bcm_signal(scene, bits, bcm_signal, image_ptr);
 
-            bcm_signal += bit_depth;
+            bcm_signal += bit_depth + 1;
             image_ptr += stride;
         }
     }

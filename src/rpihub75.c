@@ -108,8 +108,8 @@ void check_scene(const scene_info *scene) {
     if (scene->image == NULL) {
         die("No RGB image buffer defined\n");
     }
-    if (scene->bit_depth < 8 || scene->bit_depth > 64) {
-        die("Only 8-64 bit depth supported\n");
+    if (scene->bit_depth < 4 || scene->bit_depth > 64) {
+        die("Only 4-64 bit depth supported\n");
     }
     if (scene->motion_blur_frames > 32) {
         die("Max motion blur frames is 32\n");
@@ -305,7 +305,7 @@ void render_forever_pi4(const scene_info *scene, int version) {
     while(scene->do_render) {
 
         // iterate over the bit plane
-        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
+        for (uint8_t pwm=0; pwm<bit_depth-1; pwm++) {
             time_t current_time_s = time(NULL);
             frame_count++;
             // for the current bit plane, render the entire frame
@@ -339,7 +339,7 @@ void render_forever_pi4(const scene_info *scene, int version) {
                     jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
 
                     // advance to the next pixel in the bcm signal
-                    offset += bit_depth;
+                    offset += bit_depth + 1;
                 }
                 PERIBase[7] = PIN_LATCH | PIN_OE;
                 SLOW
@@ -453,7 +453,7 @@ void render_forever(const scene_info *scene) {
 
         // iterate over the bit plane
         //PRE_TIME;
-        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
+        for (uint8_t pwm=0; pwm<bit_depth-1; pwm++) {
             time_t current_time_s = time(NULL);
             frame_count++;
             // for the current bit plane, render the entire frame
@@ -469,7 +469,7 @@ void render_forever(const scene_info *scene) {
                     // set all bits in 1 op. RGB data, current row address and the OE jitter mask (brightness control)
                     rio->Out = bcm_signal[offset] | addr_map[y] | jitter_mask[jitter_idx];
 
-                    SLOW2
+                    // SLOW2
                     // toggle clock pin high
                     rioSET->Out = PIN_CLK;
 
@@ -477,7 +477,7 @@ void render_forever(const scene_info *scene) {
                     jitter_idx = (jitter_idx + 1) % JITTER_SIZE;
 
                     // advance to the next pixel in the bcm signal
-                    offset += bit_depth;
+                    offset += bit_depth + 1;
                 }
                 // make sure enable pin is high (display off) while we are latching data
                 // latch the data for the entire row
