@@ -98,7 +98,7 @@ int main(int argc, char **argv)
         pthread_create(&update_thread, NULL, render_cpu, scene);
     }
     // use the gpu shader or video renderer if we have one, else use the cpu renderer above
-    if (access(scene->shader_file, R_OK) == 0) {
+    else if (access(scene->shader_file, R_OK) == 0) {
         if (has_extension(scene->shader_file, "glsl")) {
             printf("render shader [%s]", scene->shader_file);
             scene->stride = 4;

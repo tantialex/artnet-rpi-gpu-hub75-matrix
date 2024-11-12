@@ -160,7 +160,7 @@ void binary32(FILE *fd, const uint32_t number) {
 void binary64(FILE *fd, const uint64_t number) {
     // Print the number in binary format, ensure it only shows 11 bits
     for (int i = 63; i >= 0; i--) {
-        fprintf(fd, "%ld", (number >> i) & 1);
+        fprintf(fd, "%lld", (number >> i) & 1);
     }
 }
 
@@ -302,7 +302,7 @@ long calculate_fps(const uint16_t target_fps, const bool show_fps) {
  */
 uint32_t* map_gpio(uint32_t offset, int version) {
 
-    off_t peri = 0;
+    loff_t peri = 0;
     int mem_fd = 0; 
     if (version == 4) {
 	    peri = PERI4_BASE;
@@ -317,7 +317,7 @@ uint32_t* map_gpio(uint32_t offset, int version) {
 	    die("unknown pi version\n");
     }
 
-    printf("peripheral address: %lx\n", peri);
+    printf("peripheral address: %llx\n", peri);
 
     asm volatile ("" : : : "memory");  // Prevents optimization
     uint32_t *map = (uint32_t *)mmap(

@@ -96,7 +96,7 @@ Build & Install - Raspbian Lite
 sudo apt update
 sudo apt upgrade
 # build dependencies for rpi-gpu-hub75-matrix
-sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev 
+sudo apt install build-essential gcc make libgles2-mesa-dev libgbm-dev libegl1-mesa-dev libavformat-dev libswscale-dev
 
 # for compiling the video player support (optional) (currently in devlopment)
 sudo apt install libavformat-dev libswscale-dev ffmpeg

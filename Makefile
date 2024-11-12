@@ -30,6 +30,9 @@ OBJ_GPU = $(patsubst src/%.c,$(BUILDDIR)/%.o,$(SRC_GPU))
 GLESV2_FOUND := $(shell pkg-config --exists glesv2 && echo yes || echo no)
 GBM_FOUND := $(shell pkg-config --exists gbm && echo yes || echo no)
 EGL_FOUND := $(shell pkg-config --exists egl && echo yes || echo no)
+AVCODEC_FOUND := $(shell pkg-config --exists libavcodec && echo yes || echo no)
+SWSCALE_FOUND := $(shell pkg-config --exists libswscale && echo yes || echo no)
+AVUTIL_FOUND := $(shell pkg-config --exists libavutil && echo yes || echo no)
 
 # Targets
 .PHONY: all clean install check-libs example
@@ -55,6 +58,15 @@ ifeq ($(GBM_FOUND),no)
 endif
 ifeq ($(EGL_FOUND),no)
     $(error "EGL library not found. Please install it. sudo apt-get install libegl1-mesa-dev")
+endif
+ifeq ($(AVCODEC_FOUND),no)
+    $(error "AVCodec library not found. Please install it. sudo apt-get install libavcodec-dev")
+endif
+ifeq ($(SWSCALE_FOUND),no)
+    $(error "SWscale library not found. Please install it. sudo apt-get install libswscale-dev")
+endif
+ifeq ($(AVUTIL_FOUND),no)
+    $(error "SWscale library not found. Please install it. sudo apt-get install libavutil-dev")
 endif
 
 # No-GPU library (without gpu.c, no OpenGL)
