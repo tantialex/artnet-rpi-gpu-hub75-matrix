@@ -77,7 +77,7 @@
 // global OE jitter mask, should be a prime >1031 and <=4093
 // we don't want to make this too large, as it will consume memory
 // and decrease L1-L3 cache locality of other data
-#define JITTER_SIZE 9093 
+#define JITTER_SIZE 32771 
 
 #define JITTER_MAX_RUN_LEN 4
 #define JITTER_PASSES 3
