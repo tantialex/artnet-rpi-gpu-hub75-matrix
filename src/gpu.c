@@ -45,6 +45,7 @@ const char *shadertoy_header =
     "uniform sampler2D iChannel0;\n"
     "uniform sampler2D iChannel1;\n"
     "uniform float iTime;\n"
+    "uniform float iTimeDelta;\n"
 
     "out vec4 fragColor;\n"
     "%s\n"
@@ -299,7 +300,7 @@ void *render_shader(void *arg) {
 
 
     // setup the timers for frame delays
-    struct timespec start_time, end_time;
+    struct timespec start_time, end_time, orig_time;
     // uint32_t frame_time_us = 1000000 / scene->fps;
     size_t image_buf_sz = scene->width * (scene->height) * sizeof(uint32_t);
 
@@ -315,6 +316,7 @@ void *render_shader(void *arg) {
 
     // uniforms point to information we will pass to the GLSL shader
     GLint timeLocation = glGetUniformLocation(program, "iTime");
+    GLint timeDeltaLocation = glGetUniformLocation(program, "iTimeDelta");
     GLint frameLocation = glGetUniformLocation(program, "iFrame");
     GLint resLocation = glGetUniformLocation(program, "iResolution");
     GLint chan0Location = glGetUniformLocation(program, "iChannel0");
@@ -324,7 +326,7 @@ void *render_shader(void *arg) {
 
     // some variables for each frame iteration
     float motion_blur[scene->motion_blur_frames+1];
-    float time = 0.0f;
+    float time1, time2 = 0.0f;
     unsigned long frame= 0;
     int frame_num = 0;
 
@@ -354,6 +356,7 @@ void *render_shader(void *arg) {
 
     char *chan1 = change_file_extension(scene->shader_file, "channel1");
     if (access(chan1, R_OK) == 0) {
+        printf("loading texture %s\n", chan1);
         texture1 = load_texture(chan1);
         if (texture1 == 0) {
             die("unable to load texture '%s'\n", chan1);
@@ -366,10 +369,12 @@ void *render_shader(void *arg) {
     //printf("GLSL shader compiled. rendering...\n");
     // loop until do_render is false. most likely never exit...
     clock_gettime(CLOCK_MONOTONIC, &start_time);
+    clock_gettime(CLOCK_MONOTONIC, &orig_time);
     while(scene->do_render) {
         frame++;
         clock_gettime(CLOCK_MONOTONIC, &end_time);
-        time = (end_time.tv_sec - start_time.tv_sec) + (end_time.tv_nsec - start_time.tv_nsec) / 1000000000.0f;
+        time1 = (end_time.tv_sec - orig_time.tv_sec) + (end_time.tv_nsec - orig_time.tv_nsec) / 1000000000.0f;
+        time2 = (end_time.tv_sec - start_time.tv_sec) + (end_time.tv_nsec - start_time.tv_nsec) / 1000000000.0f;
         glUseProgram(program);
 
         if (texture0) {
@@ -382,7 +387,8 @@ void *render_shader(void *arg) {
             }
         }
 
-        glUniform1f(timeLocation, time);
+        glUniform1f(timeLocation, time1);
+        glUniform1f(timeDeltaLocation, time2);
         glUniform1f(frameLocation, frame);
         glUniform1i(chan0Location, 0);
         glUniform1i(chan1Location, 1);
