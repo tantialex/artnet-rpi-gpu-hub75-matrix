@@ -305,7 +305,7 @@ void render_forever_pi4(const scene_info *scene, int version) {
     while(scene->do_render) {
 
         // iterate over the bit plane
-        for (uint8_t pwm=0; pwm<bit_depth-1; pwm++) {
+        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
             time_t current_time_s = time(NULL);
             frame_count++;
             // for the current bit plane, render the entire frame
@@ -453,7 +453,7 @@ void render_forever(const scene_info *scene) {
 
         // iterate over the bit plane
         //PRE_TIME;
-        for (uint8_t pwm=0; pwm<bit_depth-1; pwm++) {
+        for (uint8_t pwm=0; pwm<bit_depth; pwm++) {
             time_t current_time_s = time(NULL);
             frame_count++;
             // for the current bit plane, render the entire frame
