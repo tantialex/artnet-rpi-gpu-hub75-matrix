@@ -1187,10 +1187,10 @@ inline void hub_pixel_alpha(scene_info *scene, const int x, const int y, const R
  * @param color 
  */
 void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uint16_t x2, const uint16_t y2, const RGB color) {
-    uint16_t fx1 = x1 % scene->width-1;
-    uint16_t fx2 = x2 % scene->width-1;
-    uint16_t fy1 = y1 % scene->height-1;
-    uint16_t fy2 = y2 % scene->height-1;
+    uint16_t fx1 = x1 % scene->width;
+    uint16_t fx2 = x2 % scene->width;
+    uint16_t fy1 = y1 % scene->height;
+    uint16_t fy2 = y2 % scene->height;
 
     if (fx2 < fx1) {
         uint16_t temp = fx1;
