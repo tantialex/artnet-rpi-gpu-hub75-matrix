@@ -1202,8 +1202,8 @@ void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uin
         fy1 = fy2;
         fy2 = temp;
     }
-    for (int y = fy1; y < fy2; y++) {
-        for (int x = fx1; x < fx2; x++) {
+    for (int y = fy1; y <= fy2; y++) {
+        for (int x = fx1; x <= fx2; x++) {
             hub_pixel(scene, x, y, color);
         }
     }
