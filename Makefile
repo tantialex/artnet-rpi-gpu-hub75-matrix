@@ -5,6 +5,7 @@ CC = gcc
 CFLAGS = -DNDEBUG=1 -std=gnu2x -fPIC -ffast-math -fopt-info-vec -funroll-loops -ftree-vectorize -mtune=native -O3 -Wall -Wpedantic -Iinclude
 LDFLAGS = -lpthread -lrt -lm -lc -lavformat -lavcodec -lswscale -lavutil
 CFLAGS += $(DEF)
+CFLAGS += `pkg-config --cflags libavcodec` 
 
 # Directories
 PREFIX = /usr/local

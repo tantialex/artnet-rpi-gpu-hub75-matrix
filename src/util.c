@@ -317,8 +317,9 @@ uint32_t* map_gpio(uint32_t offset, int version) {
 	    die("unknown pi version\n");
     }
 
-    printf("peripheral address: %llx\n", peri);
-
+    if (CONSOLE_DEBUG) {
+        printf("peripheral address: %llx\n", peri);
+    }
     asm volatile ("" : : : "memory");  // Prevents optimization
     uint32_t *map = (uint32_t *)mmap(
         NULL,
@@ -335,8 +336,9 @@ uint32_t* map_gpio(uint32_t offset, int version) {
     if (mem_fd != 0) {
     	close(mem_fd);
     }
-
-    printf("gpio mapped\n");
+    if (CONSOLE_DEBUG) {
+        printf("gpio mapped\n");
+    }
     return map;
 }
 
@@ -420,14 +422,17 @@ void configure_gpio(uint32_t *PERIBase, int version) {
         uint32_t *GPIOBase = PERIBase + gpio_off;
         uint32_t *RIOBase = PERIBase + rio_off;
 
-	printf("configure pin %d\n", pin_num);
+        if (CONSOLE_DEBUG) {
+            printf("configure pin %d\n", pin_num);
+        }
         GPIO[pin_num].ctrl = 5;
         pad[pin_num] = 0x15;
 
         rioSET->OE = 0x01<<pin_num;     // these 2 lines actually set the pin to output mode
         rioSET->Out = 0x01<<pin_num;
-
-        printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
+        if (CONSOLE_DEBUG) {
+            printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
+        }
     }
 }
 
@@ -603,7 +608,7 @@ scene_info *default_scene(int argc, char **argv) {
             break;
         case 't':
             char *lvl = get_nth_token(optarg, ':', 1);
-            printf("lvl: %s\n", lvl);
+            // printf("lvl: %s\n", lvl);
             float level = atof(lvl);
             char *tone = get_nth_token(optarg, ':', 0);
             scene->tone_level = 1.0f;

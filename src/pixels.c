@@ -861,7 +861,9 @@ void *tone_map_rgb_bits(const scene_info *scene, const int num_bits, float *quan
     }
 
     if (num_bits <= 32) {
-        printf("return bits32\n");
+        if (CONSOLE_DEBUG) {
+            printf("return bits32\n");
+        }
         return bits32;
     }
     return bits64;
@@ -1232,8 +1234,9 @@ void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uin
     }
     ASSERT(y1 < scene->height);
     ASSERT(x1 < scene->width);
-    printf("%dx%d, %dx%d\n", x0, y0, x1, y1);
-
+    if (CONSOLE_DEBUG) {
+        printf("%dx%d, %dx%d\n", x0, y0, x1, y1);
+    }
 
     RGB left, right, final;
     float h_ratio, v_ratio = 0.0f;
@@ -1250,7 +1253,9 @@ void hub_fill_grad(scene_info *scene, uint16_t x0, uint16_t y0, uint16_t x1, uin
 
             //float horizontal = gradient.type(y0, y1, x0, x1, v_ratio, h_ratio);
             float horizontal = gradient.type(y0, y1, x0, x1, v_ratio, h_ratio);
-            printf("v: %f, h: %f\n", (double)vertical, (double)horizontal);
+            if (CONSOLE_DEBUG) {
+                printf("v: %f, h: %f\n", (double)vertical, (double)horizontal);
+            }
             interpolate_rgb(&final, left, right, horizontal);
 
             hub_pixel(scene, x, y, final);

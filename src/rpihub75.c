@@ -79,8 +79,10 @@ uint32_t row_to_address(const int y, uint8_t half_height) {
  * @param scene 
  */
 void check_scene(const scene_info *scene) {
-    printf("ports: %d, chains: %d, width: %d, height: %d, stride: %d, bit_depth: %d\n", 
-        scene->num_ports, scene->num_chains, scene->width, scene->height, scene->stride, scene->bit_depth);
+    if (CONSOLE_DEBUG) {
+        printf("ports: %d, chains: %d, width: %d, height: %d, stride: %d, bit_depth: %d\n", 
+            scene->num_ports, scene->num_chains, scene->width, scene->height, scene->stride, scene->bit_depth);
+    }
     if (scene->num_ports > 3) {
         die("Only 3 port supported at this time\n");
     }
