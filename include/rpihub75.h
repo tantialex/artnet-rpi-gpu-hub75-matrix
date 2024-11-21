@@ -307,6 +307,10 @@ struct udp_packet {
     uint8_t data[PACKET_SIZE - 10];
 };
 
+enum pixel_order_e {
+    PIXEL_ORDER_RGB,
+    PIXEL_ORDER_RBG
+};
 
 // self referencing function pointers need this defined first
 struct scene_info;
@@ -428,6 +432,8 @@ typedef struct scene_info {
      */
     bool show_fps;
 
+    enum pixel_order_e pixel_order;
+    
 } scene_info;
 
 
