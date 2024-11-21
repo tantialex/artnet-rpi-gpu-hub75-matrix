@@ -1461,8 +1461,8 @@ inline void hub_pixel_alpha(scene_info *scene, const int x, const int y, const R
  * @param scene 
  * @param x1
  * @param y1
- * @param x2 
- * @param y2 
+ * @param x2 inclusive
+ * @param y2 inclusive
  * @param color 
  */
 void hub_fill(scene_info *scene, const uint16_t x1, const uint16_t y1, const uint16_t x2, const uint16_t y2, const RGB color) {
