@@ -317,8 +317,9 @@ uint32_t* map_gpio(uint32_t offset, int version) {
 	    die("unknown pi version\n");
     }
 
-    printf("peripheral address: %llx\n", peri);
-
+    if (CONSOLE_DEBUG) {
+        printf("peripheral address: %llx\n", peri);
+    }
     asm volatile ("" : : : "memory");  // Prevents optimization
     uint32_t *map = (uint32_t *)mmap(
         NULL,
@@ -335,8 +336,9 @@ uint32_t* map_gpio(uint32_t offset, int version) {
     if (mem_fd != 0) {
     	close(mem_fd);
     }
-
-    printf("gpio mapped\n");
+    if (CONSOLE_DEBUG) {
+        printf("gpio mapped\n");
+    }
     return map;
 }
 
@@ -420,14 +422,17 @@ void configure_gpio(uint32_t *PERIBase, int version) {
         uint32_t *GPIOBase = PERIBase + gpio_off;
         uint32_t *RIOBase = PERIBase + rio_off;
 
-	printf("configure pin %d\n", pin_num);
+        if (CONSOLE_DEBUG) {
+            printf("configure pin %d\n", pin_num);
+        }
         GPIO[pin_num].ctrl = 5;
         pad[pin_num] = 0x15;
 
         rioSET->OE = 0x01<<pin_num;     // these 2 lines actually set the pin to output mode
         rioSET->Out = 0x01<<pin_num;
-
-        printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
+        if (CONSOLE_DEBUG) {
+            printf("configured pin %d, ctrl [%d], pad [%x]\n", pin_num, GPIO[pin_num].ctrl, pad[pin_num]);
+        }
     }
 }
 
@@ -439,12 +444,13 @@ void configure_gpio(uint32_t *PERIBase, int version) {
  */
 void usage(int argc, char **argv) {
     die(
-        "Usage 2: %s\n"
+        "Usage: %s\n"
         "     -s <file>         GPU fragment shader, or mp4 file to render\n"
         "     -x <width>        total pixel width         (16-512)\n"
         "     -y <height>       total pixel height        (16-512)\n"
         "     -w <width>        panel width               (16/32/64)\n"
         "     -h <height>       panel height              (16/32/64)\n"
+        "     -O <RGB>          panel pixel order         (RGB, RBG)\n"
         "     -f <fps>          target frames per second  (1-255)\n"
         "     -p <num ports>    number of ports           (1-3)\n"
         "     -c <num chains>   number of panels chained  (1-16)\n"
@@ -529,6 +535,7 @@ scene_info *default_scene(int argc, char **argv) {
     scene->jitter_brightness = true;
 
     scene->bit_depth = 32;
+    scene->pixel_order = PIXEL_ORDER_RGB;
     scene->bcm_mapper = map_byte_image_to_bcm;
     scene->tone_mapper = copy_tone_mapperF;
     scene->brightness = 200;
@@ -547,7 +554,7 @@ scene_info *default_scene(int argc, char **argv) {
 
     // Parse command-line options
     int opt;
-    while ((opt = getopt(argc, argv, "x:y:w:h:s:f:p:c:g:d:m:b:t:l:i:jzo?")) != -1) {
+    while ((opt = getopt(argc, argv, "O:x:y:w:h:s:f:p:c:g:d:m:b:t:l:i:jzo?")) != -1) {
         switch (opt) {
         case 's':
             scene->shader_file = optarg;
@@ -603,7 +610,7 @@ scene_info *default_scene(int argc, char **argv) {
             break;
         case 't':
             char *lvl = get_nth_token(optarg, ':', 1);
-            printf("lvl: %s\n", lvl);
+            // printf("lvl: %s\n", lvl);
             float level = atof(lvl);
             char *tone = get_nth_token(optarg, ':', 0);
             scene->tone_level = 1.0f;
@@ -653,6 +660,17 @@ scene_info *default_scene(int argc, char **argv) {
                 die("Unknown image mapper: %s, must be one of (u, mirror, flip, mirror_flip)\n", optarg);
             }
             break;
+        case 'O':
+            if (strcasecmp(optarg, "RGB") == 0) {
+                scene->pixel_order = PIXEL_ORDER_RGB;
+            }
+            else if (strcasecmp(optarg, "RBG") == 0) {
+                scene->pixel_order = PIXEL_ORDER_RBG;
+            } else {
+                die("Unknown panel pixel order: %s, must be one of (RGB, RBG)\n", optarg);
+            }
+            break;
+
         default:
             usage(argc, argv);
         }
