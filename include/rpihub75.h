@@ -307,6 +307,7 @@ struct udp_packet {
     uint8_t data[PACKET_SIZE - 10];
 };
 
+/** @brief enumeration of supported pixel order on panel */
 enum pixel_order_e {
     PIXEL_ORDER_RGB,
     PIXEL_ORDER_RBG
@@ -334,8 +335,12 @@ typedef struct scene_info {
     /** @brief the number of bytes per pixel in the drawing buffers (3 for RGB, 4 for RGBA) */
     uint8_t  stride;
 
+    /** @brief the order of pixels on panel */
+    enum pixel_order_e pixel_order;
+    
     /** @brief single panel width in pixels */
     uint16_t panel_width;
+
     /** @brief single panel height in pixels */
     uint16_t panel_height;
 
@@ -431,8 +436,6 @@ typedef struct scene_info {
      * set to true to show the FPS on the screen
      */
     bool show_fps;
-
-    enum pixel_order_e pixel_order;
     
 } scene_info;
 
