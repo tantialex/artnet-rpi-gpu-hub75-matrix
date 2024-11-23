@@ -448,9 +448,9 @@ void usage(int argc, char **argv) {
         "     -s <file>         GPU fragment shader, or mp4 file to render\n"
         "     -x <width>        total pixel width         (16-512)\n"
         "     -y <height>       total pixel height        (16-512)\n"
-        "     -w <width>        panel width               (16/32/64)\n"
+        "     -w <width>        panel width               (16/32/64/128)\n"
         "     -h <height>       panel height              (16/32/64)\n"
-        "     -O <RGB>          panel pixel order         (RGB, RBG)\n"
+        "     -O <RGB>          panel pixel order         (RGB, RBG, BGR)\n"
         "     -f <fps>          target frames per second  (1-255)\n"
         "     -p <num ports>    number of ports           (1-3)\n"
         "     -c <num chains>   number of panels chained  (1-16)\n"
@@ -666,8 +666,11 @@ scene_info *default_scene(int argc, char **argv) {
             }
             else if (strcasecmp(optarg, "RBG") == 0) {
                 scene->pixel_order = PIXEL_ORDER_RBG;
+            }
+            else if (strcasecmp(optarg, "BGR") == 0) {
+                scene->pixel_order = PIXEL_ORDER_BGR;
             } else {
-                die("Unknown panel pixel order: %s, must be one of (RGB, RBG)\n", optarg);
+                die("Unknown panel pixel order: %s, must be one of (RGB, RBG, BGR)\n", optarg);
             }
             break;
 
