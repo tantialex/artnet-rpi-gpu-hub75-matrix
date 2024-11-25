@@ -152,16 +152,16 @@ sudo apt install git vim bc bison flex libssl-dev libncurses5-dev
 
 mkdir kernel
 git clone --depth=1 --branch rpi-6.6.y https:/github.com/raspberrypi/linux
-wget https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-6.6.35-rt34.patch.gz
+wget https://mirrors.edge.kernel.org/pub/linux/kernel/projects/rt/6.6/patch-6.6.58-rt45.patch.gz
 cd linux
-zcat ../patch-6.6.35-rt34.patch.gz | patch -p1 --dry-run # make sure patch applies correctly
-zcat ../patch-6.6.35-rt34.patch.gz | patch -p1
+zcat ../patch-6.6.58-rt45.patch.gz | patch -p1 --dry-run # make sure patch applies correctly
+zcat ../patch-6.6.58-rt45.patch.gz | patch -p1
 KERNEL=kernel_2712                                       # use kernel_8 for rpi1-4
 make bcm2712_defconfig                                   # use bcm2711_defconfig for rpi1-4 
 
 make menuconfig                                          # General -> Preemption Model -> select Real Time option
 vi .config                                               # custome CONFIG_LOCALVERSION (helps you identify your kernel when runing uname -a)
-make -j4 Image.gs modules dtbs
+make -j4 Image.gz modules dtbs
 # wait about 30-45 minutes
 echo $KERNEL
 sudo make -j4 modules_install
@@ -169,7 +169,7 @@ sudo cp /boot/firmware/$KERNEL.img /boot/firmware/$KERNEL-backup.img
 sudo cp arch/arm64/boot/Image.gz /boot/firmware/$KERNEL.img
 sudo cp arch/arm64/boot/dts/broadcom/*.dtb /boot/firmware/
 sudo cp arch/arm64/boot/dts/overlays/*.dtb* /boot/firmware/overlays/
-sudo cp arch/arm64/boot/dts/overlays/README /boot/firmware/overloays/
+sudo cp arch/arm64/boot/dts/overlays/README /boot/firmware/overlays/
 sudo reboot
 ```
 
