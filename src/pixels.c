@@ -693,6 +693,96 @@ void update_bcm_signal_32_rbg(
     // the LEDS to the correct brightness levels
 }
 
+/**
+ * @brief See update_bcm_signal_32_rgb. BGR pixel order version.
+ */
+__attribute__((hot))
+void update_bcm_signal_32_bgr(
+    const scene_info *scene,
+    const void *__restrict__ void_bits,
+    uint32_t *__restrict__ bcm_signal,
+    const uint8_t *__restrict__ image) {
+
+    const uint32_t *bits_red = (const uint32_t*)void_bits;
+    const uint32_t *bits_green = bits_red+256;
+    const uint32_t *bits_blue = bits_red+512;
+
+    // offset to the Port0 top pixel image
+    //uint32_t img_idx = offset;
+    // offset from top pixel to lower pixel in image data.
+    static uint32_t panel_stride = 0;
+    // offsets for each pixel on each port
+    static uint32_t p0t = 0, p0b = 0, p1t = 0, p1b = 0, p2t = 0, p2b =0;
+
+    // calculate the image index to all 3 ports. we only need to do this once ever
+    if (UNLIKELY(panel_stride == 0)) {
+        panel_stride = scene->width * (scene->panel_height / 2) * scene->stride;
+        p0b = p0t + panel_stride;
+        p1t = p0b + panel_stride;
+        p1b = p1t + panel_stride;
+        p2t = p1b + panel_stride;
+        p2b = p2t + panel_stride;
+    }
+
+    // inform compiler that bit depth is aligned, improves compiler optimization
+    // BIT_DEPTH_ALIGNMENT should be multiple of 4, ideally 16.
+    uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+
+    ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+    ASSERT(bit_depth <= 32);
+
+
+    uint8_t bcm_offset = 0;
+    for (int j=0; j<bit_depth; j++) {
+        // mask off just this bit plane's data
+        const uint32_t mask = 1 << j;
+
+        // this works by first finding the index into the red byte (+0) of the 24bpp source image
+        // looking up the bcm bit mask value at that red color value (128 = 1010101010101..), logical AND with
+        // the current bit position we are calculating (1<<j) and then shifting that bit (0 or 1) to the correct pin (ADDRESS_Px_CX)
+        // and logical OR that value for the current bcm_signal offset.
+        // repeat this for green (+1), blue (+2), and once for each pixel on each port
+
+        // !! - first ! turns 00100000 into 0000000, second ! turns 000000 into 00000001
+        // !! - first ! turns 00000000 into 0000001, second ! turns 000001 into 00000000
+        // this way we get a 1 value for the mask of the (bcm_bits & mask) so we can << the correct number of bits
+
+        bcm_signal[bcm_offset++] =
+            // PORT 0, top pixel
+            (!!(bits_red[image[0]] & mask)) << ADDRESS_P0_B1 |
+            (!!(bits_green[image[1]] & mask)) << ADDRESS_P0_G1 |
+            (!!(bits_blue[image[2]] & mask)) << ADDRESS_P0_R1 |
+
+            // PORT 0, bottom pixel
+            (!!(bits_red[image[p0b+0]] & mask)) << ADDRESS_P0_B2 |
+            (!!(bits_green[image[p0b+1]] & mask)) << ADDRESS_P0_G2 |
+            (!!(bits_blue[image[p0b+2]] & mask)) << ADDRESS_P0_R2 |
+
+            // PORT 1, bottom pixel
+            (!!(bits_red[image[p1t+0]] & mask)) << ADDRESS_P1_B1 |
+            (!!(bits_green[image[p1t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits_blue[image[p1t+2]] & mask)) << ADDRESS_P1_R1 |
+
+            // PORT 1, bottom pixel
+            (!!(bits_red[image[p1b+0]] & mask)) << ADDRESS_P1_B2 |
+            (!!(bits_green[image[p1b+1]] & mask)) << ADDRESS_P1_G2 |
+            (!!(bits_blue[image[p1b+2]] & mask)) << ADDRESS_P1_R2 |
+
+            // PORT 2, bottom pixel
+            (!!(bits_red[image[p2t+0]] & mask)) << ADDRESS_P2_B1 |
+            (!!(bits_green[image[p2t+1]] & mask)) << ADDRESS_P2_G1 |
+            (!!(bits_blue[image[p2t+2]] & mask)) << ADDRESS_P2_R1 |
+
+            // PORT 2, bottom pixel
+            (!!(bits_red[image[p2b+0]] & mask)) << ADDRESS_P2_B2 |
+            (!!(bits_green[image[p2b+1]] & mask)) << ADDRESS_P2_G2 |
+            (!!(bits_blue[image[p2b+2]] & mask)) << ADDRESS_P2_R2;
+
+    }
+    // bcm_signal is now bit mask of length bit_depth for these 6 pixels that can be iterated through to light
+    // the LEDS to the correct brightness levels
+}
+
 
 __attribute__((hot))
 void update_bcm_signal_dither_32_rgb(
@@ -1035,6 +1125,89 @@ void update_bcm_signal_64_rbg(
 }
 
 
+__attribute__((hot))
+void update_bcm_signal_64_bgr(
+    const scene_info *scene,
+    const void *__restrict__ void_bits,
+    uint32_t *__restrict__ bcm_signal,
+    const uint8_t *__restrict__ image) {
+
+    const uint64_t *bits = (const uint64_t*)void_bits;
+    // offset from top pixel to lower pixel in image data.
+    static int32_t panel_stride = 0;
+    // offsets for each pixel on each port
+    static uint32_t p0t = 0, p0b = 0, p1t = 0, p1b = 0, p2t = 0, p2b =0;
+
+    // calculate the image index to all 3 ports. we only need to do this once ever
+    if (UNLIKELY(panel_stride == 0)) {
+        panel_stride = scene->width * (scene->panel_height / 2) * scene->stride;
+        p0b = p0t + panel_stride;
+        p1t = p0b + panel_stride;
+        p1b = p1t + panel_stride;
+        p2t = p1b + panel_stride;
+        p2b = p2t + panel_stride;
+    }
+
+
+    // inform compiler that bit depth is aligned, improves compiler optimization
+    // BIT_DEPTH_ALIGNMENT should be multiple of 4, ideally 16.
+    uint8_t bit_depth __attribute__((aligned(BIT_DEPTH_ALIGNMENT))) = scene->bit_depth;
+
+    ASSERT(bit_depth % BIT_DEPTH_ALIGNMENT == 0);
+    ASSERT(bit_depth <= 32);
+
+    uint8_t bcm_offset = 0;
+    for (int j=0; j<bit_depth; j++) {
+        // mask off just this bit plane's data
+        const uint64_t mask = 1ULL << j;
+
+        // this works by first finding the index into the red byte (+0) of the 24bpp source image
+        // looking up the bcm bit mask value at that red color value (128 = 1010101010101..), logical AND with
+        // the current bit position we are calculating (1<<j) and then shifting that bit (0 or 1) to the correct pin (ADDRESS_Px_CX)
+        // and logical OR that value for the current bcm_signal offset.
+        // repeat this for green (+1), blue (+2), and once for each pixel on each port
+
+        // !! - first ! turns 00100000 into 0000000, second ! turns 000000 into 00000001
+        // !! - first ! turns 00000000 into 0000001, second ! turns 000001 into 00000000
+        // this way we get a 1 value for the mask of the (bcm_bits & mask) so we can << the correct number of bits
+
+        bcm_signal[bcm_offset++] =
+            // PORT 0, top pixel
+            (!!(bits[image[0]] & mask)) << ADDRESS_P0_B1 |
+            (!!(bits[image[1]] & mask)) << ADDRESS_P0_G1 |
+            (!!(bits[image[2]] & mask)) << ADDRESS_P0_R1 |
+
+            // PORT 0, bottom pixel
+            (!!(bits[image[p0b+0]] & mask)) << ADDRESS_P0_B2 |
+            (!!(bits[image[p0b+1]] & mask)) << ADDRESS_P0_G2 |
+            (!!(bits[image[p0b+2]] & mask)) << ADDRESS_P0_R2 |
+
+            // PORT 1, bottom pixel
+            (!!(bits[image[p1t+0]] & mask)) << ADDRESS_P1_B1 |
+            (!!(bits[image[p1t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p1t+2]] & mask)) << ADDRESS_P1_R1 |
+
+            // PORT 1, bottom pixel
+            (!!(bits[image[p1b+0]] & mask)) << ADDRESS_P1_B2 |
+            (!!(bits[image[p1b+1]] & mask)) << ADDRESS_P1_G2 |
+            (!!(bits[image[p1b+2]] & mask)) << ADDRESS_P1_R2 |
+
+            // PORT 2, bottom pixel
+            (!!(bits[image[p2t+0]] & mask)) << ADDRESS_P1_B1 |
+            (!!(bits[image[p2t+1]] & mask)) << ADDRESS_P1_G1 |
+            (!!(bits[image[p2t+2]] & mask)) << ADDRESS_P1_R1 |
+
+            // PORT 2, bottom pixel
+            (!!(bits[image[p2b+0]] & mask)) << ADDRESS_P2_B2 |
+            (!!(bits[image[p2b+1]] & mask)) << ADDRESS_P2_G2 |
+            (!!(bits[image[p2b+2]] & mask)) << ADDRESS_P2_R2;
+
+    }
+    // bcm_signal is now bit mask of length bit_depth for these 6 pixels that can be iterated through to light
+    // the LEDS to the correct brightness levels
+}
+
+
  
 /**
  * @brief create a bcm signal map from linear sRGB space to the bcm(pwm) signal.
@@ -1190,6 +1363,9 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
         case PIXEL_ORDER_RBG:
             update_bcm_signal = (update_bcm_signal_fn)update_bcm_signal_64_rbg;
             break;
+        case PIXEL_ORDER_BGR:
+            update_bcm_signal = (update_bcm_signal_fn)update_bcm_signal_64_bgr;
+            break;
         }
     } else {
         switch (scene->pixel_order) {
@@ -1198,6 +1374,9 @@ void map_byte_image_to_bcm(scene_info *scene, uint8_t *image) {
             break;
         case PIXEL_ORDER_RBG:
             update_bcm_signal = (update_bcm_signal_fn)update_bcm_signal_32_rbg;
+            break;
+        case PIXEL_ORDER_BGR:
+            update_bcm_signal = (update_bcm_signal_fn)update_bcm_signal_32_bgr;
             break;
         }
     }

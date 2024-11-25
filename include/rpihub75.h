@@ -310,7 +310,8 @@ struct udp_packet {
 /** @brief enumeration of supported pixel order on panel */
 enum pixel_order_e {
     PIXEL_ORDER_RGB,
-    PIXEL_ORDER_RBG
+    PIXEL_ORDER_RBG,
+    PIXEL_ORDER_BGR
 };
 
 // self referencing function pointers need this defined first
