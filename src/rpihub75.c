@@ -413,6 +413,7 @@ void render_forever(const scene_info *scene) {
         }
     }
     free(line);
+    fclose(file);
     if (cpu_model == 0) die("Only Pi5, Pi4 and Pi3 are currently supported");
     if (cpu_model < 5 ) {
         render_forever_pi4(scene, cpu_model);
